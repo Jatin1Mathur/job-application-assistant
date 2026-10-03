@@ -30,12 +30,14 @@ export interface ScenePalette {
   line: string
   lineOpacity: number
   light: string
+  // The colour of a strong match score (the same green as the 2D score ring)
+  good: string
 }
 
 export function scenePalette(theme: 'light' | 'dark'): ScenePalette {
   return theme === 'dark'
-    ? { accent: '#77ced8', accentGlow: '#77ced8', dim: '#57534c', line: '#77ced8', lineOpacity: 0.18, light: '#ffffff' }
-    : { accent: '#1b7f93', accentGlow: '#3aa3b6', dim: '#c3beb5', line: '#1e1a14', lineOpacity: 0.16, light: '#ffffff' }
+    ? { accent: '#77ced8', accentGlow: '#77ced8', dim: '#57534c', line: '#77ced8', lineOpacity: 0.18, light: '#ffffff', good: '#34d399' }
+    : { accent: '#1b7f93', accentGlow: '#3aa3b6', dim: '#c3beb5', line: '#1e1a14', lineOpacity: 0.16, light: '#ffffff', good: '#047857' }
 }
 
 export interface SceneProps {

@@ -308,7 +308,7 @@ In dark mode shadows are nearly invisible, so depth comes from a slightly lighte
 
 ### Decorative depth
 
-The landing hero has three large, soft color washes (tide and sand) that drift slowly behind the content, and a 3D leather backpack with skills orbiting it. The backpack is lit with warm paper light, a sand-coloured bounce and a faint tide rim, so it belongs to the page. Inside the app there is no decorative depth.
+The landing hero has three large, soft color washes (tide and sand) that drift slowly behind the content, and a 3D leather backpack with skills orbiting it. Scrolling through the three steps below the hero plays a short story with that scene (resume into the bag, skills sorted, score ring fills); the page scrolls natively, and with reduced motion each step shows a still picture instead. The backpack is lit with warm paper light, a sand-coloured bounce and a faint tide rim, so it belongs to the page. Inside the app there is no decorative depth.
 
 ## Shapes
 

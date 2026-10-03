@@ -13,6 +13,7 @@ export default function LabelSync({
   labels,
   offsets,
   clearCentre,
+  fades,
 }: {
   objects: RefObject<(Object3D | null)[]>
   labels: RefObject<(HTMLElement | null)[]>
@@ -21,6 +22,8 @@ export default function LabelSync({
   // If set: a label fades out while its object is this close to the middle of the picture (0..1 of the half
   // width), so labels never sit on top of whatever stands in the centre
   clearCentre?: number
+  // If set: one extra opacity factor (0..1) per label, changed from outside while the scene plays
+  fades?: RefObject<number[]>
 }) {
   const camera = useThree((state) => state.camera)
   const size = useThree((state) => state.size)
@@ -38,7 +41,7 @@ export default function LabelSync({
       // Objects further away get a slightly fainter label, which adds depth
       const depthFade = Math.max(0.45, Math.min(1, 1.25 - point.z * 0.4))
       const centreFade = clearCentre ? Math.max(0, Math.min(1, (Math.abs(point.x) - clearCentre) / 0.12)) : 1
-      label.style.opacity = String(depthFade * centreFade)
+      label.style.opacity = String(depthFade * centreFade * (fades?.current[index] ?? 1))
       label.style.zIndex = String(Math.round((1 - point.z) * 1000))
     })
   })
