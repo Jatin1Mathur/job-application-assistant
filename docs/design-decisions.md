@@ -122,7 +122,7 @@ No console errors were found before or after. The only console message is a depr
 ## 5. What I kept
 
 - **All features.** My automated browser run still passes all of its checks after the redesign (77 checks, including login, upload, analysis, cover letter, board with drag and drop, insights, command palette and shortcuts).
-- **The three 3D scenes** (skill galaxy, score orb, skill universe) with the rules from before: 3D code is only downloaded where a scene is shown, every scene has a flat fallback without WebGL or with reduced motion, and the work screens stay 2D.
+- **The three 3D scenes** (skill galaxy, score orb, skill universe; the galaxy became the backpack hero in step 15, see section 7) with the rules from before: 3D code is only downloaded where a scene is shown, every scene has a flat fallback without WebGL or with reduced motion, and the work screens stay 2D.
 - **Motion that explains**: the card that grows into its page, the gliding board cards, the counting numbers, and confetti only for an offer.
 
 ## 6. Three trade-offs
@@ -136,9 +136,98 @@ Removing the letter avatars, the nested cards and the shadows makes the screens 
 **3. A bottom tab bar on phones costs screen height.**
 The labelled tab bar takes 56 px at the bottom of every phone screen, and long pages need extra padding so the last element is not covered. The alternative was to keep icon-only navigation in the top bar, which saved space but made people guess. With only three destinations, I chose clarity over space.
 
-## 7. What I have not done
+## 7. The 3D hero object (step 15)
+
+The landing page hero now shows a leather backpack with skills orbiting around it. The backpack stands for the career a job seeker carries along: what you have collected so far and take with you to the next place.
+
+### The reference and what I did with it
+
+The model was rebuilt from one reference photo: **"brown leather backpack on white surface" by Wiser by the Mile on Unsplash (Unsplash License)**. The photo itself is not in this repository (`frontend/reference/` is ignored by git), and no pixel of it is used in the product. The shapes are written in code and the leather is drawn with seeded noise.
+
+I followed the pipeline of the img2threejs skill:
+
+1. **Image analysis** in a fixed order (form, parts, relations, materials, identity-defining features, what one view hides).
+2. **Suitability:** "conditional", because there is only one front view. The back, the sides, the depth and the straps are convention, not evidence.
+3. **A sculpt spec** with 18 parts and 5 materials, checked by the skill's strict validator.
+4. **Eight build passes**, each rendered from five directions and compared with the photo: blockout, structure, form, material, surface, lighting, interaction, optimization. Each pass was recorded with scores and with what still does not match.
+
+The deterministic outline check of the final model against the photo gives a silhouette overlap (IoU) of 0.92. My own estimate of the overall likeness is about 0.78 on the skill's scale, which it describes as "object reads correctly, local details approximate". The renders of the passes are in `docs/screenshots/3d/` (`pass-1-blockout`, `pass-2-structure`, `model-front`, `model-three-quarter`, `model-rear`). The side-by-side sheets with the photo are not committed, because they contain the photo.
+
+### Decisions
+
+- **The model code is written by hand, from the spec.** The skill's generator produced a first blockout, but it flattened curved parts (the handle became a straight slab), and its output loads textures cut from the photo and contains file paths from my machine. So I used the skill's "refine code" route: I wrote the model myself in `frontend/src/three/backpack/createBackpack.ts` and kept using the skill's capture, gate and comparison tools for every pass.
+- **The maker's logo is not reproduced.** The real bag has an embossed brand mark on the front. I replaced it with a plain plate. Copying a brand's mark into my project would be wrong, and it is not what makes the object a backpack.
+- **Stylized, not photoreal.** The panels are smooth and rounded. The sag, the wrinkles, the gathered folds of the side pockets and the darker patina along the seams of the real bag are only suggested. For a small, slowly turning hero object this reads better than a noisy surface, and it costs far fewer triangles.
+- **It turns from side to side instead of spinning.** The photo says nothing about the back, so the back is the weakest part of the model. A slow swing of about 30 degrees to each side shows the volume without showing the back.
+- **Lighting follows DESIGN.md, not the photo.** The photo is lit like a studio shot: flat, white, high-key. In the product the bag gets warm paper light from above, a sand-coloured bounce from below, one soft key, and a faint rim in the accent colour (tide), so it belongs to the page it stands on.
+- **Skills orbit the backpack, with limits.** My first version had eight skills, and it was too busy: labels crossed in front of the bag and the bag was small. The version I kept has six skills (four on a phone) on two visible orbits, a larger bag, a camera slightly above so the orbits open into ellipses, and labels that fade while their skill passes in front of or behind the bag.
+- **The score orb was left as it is.** It already uses the three match colours of DESIGN.md and has the number as normal text.
+
+### Performance, kept from before
+
+- The backpack is part of the lazy 3D code. Pages without a 3D scene still download none of it.
+- Full detail is 11,656 triangles with one 512 px texture set; the phone version is 6,888 triangles with 256 px textures and no bump map.
+- Stitches are one instanced mesh. The shadow under the bag is a soft gradient on a plane, not a real shadow.
+- The pixel ratio cap, the pause when off-screen or in a hidden tab, and the static fallback (a flat drawing of the same bag and skills) for browsers without WebGL and for reduced motion all still apply.
+- Size of the 3D code: 937 kB (251 kB compressed) before, 944 kB (254 kB compressed) after. The main bundle went from 1,095 kB to 1,096 kB.
+
+### The better option, if this is still too much
+
+If the hero should be calmer still, I would drop the orbit lines and keep only three skills. The backpack alone carries the idea; the skills are there to connect it to what the product does.
+
+## 8. Scroll storytelling on the landing page
+
+The hero and "How it works" are now one story. The 3D scene stays in view while the text scrolls past it, and the scroll position plays the scene:
+
+| Where you are | What the scene shows |
+|---|---|
+| Top of the page | The backpack floats, the skills orbit, all in the same colour |
+| Step 1, "Upload your resume" | The backpack turns to a three-quarter view and a resume sheet slides into it |
+| Step 2, "Analyze the match" | The orbits tighten; matching skills grow and glow in the accent colour, missing skills shrink and fade |
+| Step 3, "Get your score" | The backpack moves aside and a score ring fills to 82 |
+
+Screenshots of the four positions are in `docs/screenshots/3d/scroll/`.
+
+### Decisions
+
+- **Native scrolling.** The page scrolls the normal way. Motion's `useScroll` only *reads* how far the list of steps has moved through the screen, and `useTransform` turns that into a story position from 0 to 3. Nothing catches the scroll wheel, nothing snaps, and scrolling back plays the story backwards.
+- **The steps moved up, directly under the hero.** Before, "How it works" was the fourth section. A scene that follows you through two unrelated sections would sit on top of their content, so the story is now one block: hero, then the three steps.
+- **One scene, not two.** The same canvas is used from the hero to the last step (CSS `position: sticky`). A second scene for the steps would mean a second WebGL context and a second copy of the backpack.
+- **Text stays readable because it never shares space with the scene.** On wide screens the text is the left column and the scene is the right column. On narrow screens the scene is pinned to the top with a solid background and the text scrolls below it. The browser test checks that the step text and the scene do not overlap.
+- **The picture holds still while you read.** The story position has flat parts: around the middle of each step the scene does not change, and the changes happen between steps.
+- **The scene follows the scroll with a small delay.** A mouse wheel scrolls in jumps. The scene moves a part of the remaining distance each frame, so it looks fluid without changing how the page itself scrolls.
+- **All skills start in one colour.** In step 15 the matching skills glowed from the start. Now the difference appears in step 2, because that is the moment the product finds it out. The legend ("Skills you have / Skills to learn") moved to step 2 for the same reason.
+- **The number in the ring is page text**, placed over the ring, like the skill names. It stays sharp and uses the same green as the 2D score ring.
+- **The step titles changed** to "Upload your resume", "Analyze the match", "Get your score". Pasting the job posting is now part of the text of step 2.
+
+### Reduced motion and no WebGL
+
+With "reduce motion" switched on (or without WebGL) there is no pinned scene and no 3D code is downloaded. The hero shows the flat drawing of the backpack, and each step gets its own still picture of the same moment: the resume half way in the bag, the sorted skills, the bag next to a ring at 82.
+
+### Phones
+
+The same story, lighter: four skills instead of six, the low-detail backpack (6,888 triangles), no anti-aliasing, pixel ratio capped at 1.25, and the scene takes about a third of the screen height.
+
+### Is it smooth?
+
+Measured on a MacBook Air (M4) in Chrome with the real graphics chip (Metal), production build, scrolling through the whole story and back in 9 seconds:
+
+| | Frames per second | 95% of frames within | Frames slower than 20 ms |
+|---|---|---|---|
+| Desktop, 1440 x 900 at 2x | 59.0 | 16.8 ms | 2 of 532 |
+| Phone size, 390 x 844 at 3x | 59.9 | 16.8 ms | 1 of 539 |
+
+The phone line is a phone-sized window on the laptop, not a real phone.
+
+Per frame the story costs a few dozen multiplications: no new geometry, no new materials, no React re-render. The ring fills by drawing more of the triangles of one fixed shape.
+
+Size: the 3D code grew from 944 kB to 948 kB (254 kB to 255 kB compressed). The main bundle grew from 1,096 kB to 1,107 kB (339 kB to 342 kB compressed), mostly Motion's scroll functions.
+
+## 9. What I have not done
 
 - No test with real users or with a screen reader user. My checks were computed contrast, keyboard walkthroughs, and automated browser runs at desktop and phone width.
 - The automatic detector of the impeccable skill was not run, as described above.
 - The 44 px rule is applied through one CSS rule for touch and narrow screens. I verified it on the insights page in the browser test, not on every page.
 - Frame rates of the 3D scenes on real phones are still unmeasured.
+- The scroll story was measured on my laptop only. I have not measured it on a real phone or on an older computer.
+- The backpack was rebuilt from one photo. Its back, sides and depth are my assumption, and I did not have a second view to check them.

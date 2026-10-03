@@ -47,3 +47,6 @@ build/
 .claude/skills/
 .agents/
 skills-lock.json
+
+### Reference photos and img2threejs working files (not part of the project) ###
+frontend/reference/

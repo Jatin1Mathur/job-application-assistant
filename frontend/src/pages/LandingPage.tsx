@@ -1,17 +1,19 @@
 import { ArrowRight } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { lazy, useEffect, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
+import { lazy, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import GalaxyFallback from '../components/GalaxyFallback.tsx'
+import BackpackFallback from '../components/BackpackFallback.tsx'
 import Lazy3D from '../components/Lazy3D.tsx'
 import Logo from '../components/Logo.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import ScoreRing from '../components/ScoreRing.tsx'
+import StoryStepArt from '../components/StoryStepArt.tsx'
 import ThemeToggle from '../components/ThemeToggle.tsx'
 import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
+import { webglSupported } from '../three/support.ts'
 
-// The 3D code is a separate download that starts only when the galaxy is about to be shown
-const SkillGalaxy = lazy(() => import('../three/SkillGalaxy.tsx'))
+// The 3D code is a separate download that starts only when the hero scene is about to be shown
+const BackpackHero = lazy(() => import('../three/BackpackHero.tsx'))
 
 const FEATURES = [
   {
@@ -29,10 +31,13 @@ const FEATURES = [
 ]
 
 const STEPS = [
-  { title: 'Upload your resume', text: 'A PDF is enough. Its text is read automatically.' },
-  { title: 'Paste a job posting', text: 'Add the company, the job title and the description.' },
-  { title: 'See your match', text: 'Get your score, what to improve, and a first draft of the cover letter.' },
+  { title: 'Upload your resume', text: 'A PDF is enough. Its text is read automatically and stays with your account.' },
+  { title: 'Analyze the match', text: 'Paste a job posting. Your resume is compared with it: which skills you already show, and which ones the job asks for that are missing.' },
+  { title: 'Get your score', text: 'One number from 0 to 100, what to improve, and a first draft of the cover letter.' },
 ]
+
+const SCENE_LABEL =
+  'A leather backpack with skills orbiting around it. While you scroll through the three steps, a resume slides into the backpack, the matching skills light up, and a score ring fills to 82 out of 100.'
 
 const EXAMPLES = [
   { job: 'Backend Developer · Acme GmbH', score: 82, label: 'Strong match', tone: 'text-emerald-700 dark:text-emerald-400', matching: ['Java', 'Spring Boot', 'PostgreSQL', 'Docker'], missing: ['Kubernetes'] },
@@ -131,6 +136,149 @@ function HeroBackground() {
   )
 }
 
+// The headline, the short pitch and the two ways in
+function HeroText() {
+  return (
+    <motion.div variants={staggerList} initial="hidden" animate="show">
+      <motion.h1 variants={staggerItem} className="text-[2.75rem] font-semibold leading-[1.05] sm:text-6xl">
+        Know where you stand before you apply.
+      </motion.h1>
+      <motion.p variants={staggerItem} className="mt-6 max-w-[34rem] text-lg leading-relaxed text-muted-foreground">
+        Job Assistant compares your resume with a job posting, shows the skills you already have and the ones
+        to work on, and drafts the cover letter.
+      </motion.p>
+      <motion.div variants={staggerItem} className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+        <MotionButton asChild className="h-12 px-6 text-base">
+          <Link to="/register">
+            Create your account <ArrowRight />
+          </Link>
+        </MotionButton>
+        <Link to="/login" className="rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
+          I already have an account
+        </Link>
+      </motion.div>
+      <motion.p variants={staggerItem} className="mt-6 text-sm text-muted-foreground">
+        The analysis runs on a local AI model, not on a cloud AI service.
+      </motion.p>
+    </motion.div>
+  )
+}
+
+// What the two kinds of skill dots mean. Shown with the "Analyze" step, where they first differ.
+function SkillLegend() {
+  return (
+    <p className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+      <span className="flex items-center gap-1.5">
+        <span className="size-2.5 rounded-full bg-primary" /> Skills you have
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="size-2.5 rounded-full bg-muted ring-1 ring-foreground/25" /> Skills to learn
+      </span>
+    </p>
+  )
+}
+
+// The scroll story: the 3D scene stays in view while the hero text and the three steps scroll past it, and the
+// scroll position plays the scene. The page scrolls in the normal way; nothing takes over the scroll wheel.
+function ScrollStory() {
+  const steps = useRef<HTMLOListElement>(null)
+  // The line on the screen a step has to reach to be "the current one": the middle on wide screens,
+  // lower on narrow ones, where the scene is pinned to the top and the text passes below it
+  const [focus] = useState(() => (window.matchMedia('(min-width: 1024px)').matches ? 0.5 : 0.7))
+  const { scrollYProgress } = useScroll({ target: steps, offset: [`start ${focus}`, `end ${focus}`] })
+  // From scroll position to story position: 0 is the hero, 1 to 3 are the steps. The flat parts
+  // (1 to 1, 2 to 2) hold the picture still while a step is being read.
+  const stage = useTransform(scrollYProgress, [0, 0.13, 0.21, 0.46, 0.54, 0.8, 1], [0, 1, 1, 2, 2, 3, 3])
+
+  return (
+    <div className="relative isolate">
+      <HeroBackground />
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-x-12">
+        <div className="py-14 lg:flex lg:min-h-[calc(100svh-4rem)] lg:items-center lg:py-0">
+          <HeroText />
+        </div>
+
+        {/* The scene. Wide screens: it fills the right column and stays there. Narrow screens: it is pinned to the
+            top with a solid background, so the text that scrolls below it is never drawn over. */}
+        <div className="sticky top-0 z-10 -mx-4 border-b bg-background px-4 sm:-mx-6 sm:px-6 lg:top-8 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mx-0 lg:flex lg:h-[calc(100svh-4rem)] lg:items-center lg:self-start lg:border-0 lg:bg-transparent lg:px-0">
+          <Lazy3D
+            label={SCENE_LABEL}
+            className="relative mx-auto h-[34svh] min-h-60 w-full max-w-lg lg:h-[26rem]"
+            fallback={<BackpackFallback />}
+            scene={(props) => <BackpackHero {...props} stage={stage} />}
+          />
+        </div>
+
+        <section aria-labelledby="how-heading" className="pb-16 pt-12 lg:col-start-1 lg:pb-[14svh] lg:pt-0">
+          <h2 id="how-heading" className="font-display text-3xl font-semibold sm:text-4xl">
+            Three steps to your first result
+          </h2>
+          <ol ref={steps} className="mt-6 lg:mt-0">
+            {STEPS.map(({ title, text }, index) => (
+              <li key={title} className="flex min-h-[52svh] flex-col justify-center lg:min-h-[78svh]">
+                <div className="border-t-2 border-primary pt-5">
+                  <span className="font-display text-4xl font-semibold text-primary" aria-hidden>
+                    {index + 1}
+                  </span>
+                  <h3 className="mt-3 text-2xl font-semibold">{title}</h3>
+                  <p className="mt-2 max-w-md text-lg leading-relaxed text-muted-foreground">{text}</p>
+                  {index === 1 && <SkillLegend />}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+// The same story without motion: one still picture per step. Shown with "reduce motion" and without WebGL.
+function StaticStory() {
+  return (
+    <>
+      <section className="relative isolate overflow-hidden">
+        <HeroBackground />
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:py-24">
+          <HeroText />
+          <Lazy3D
+            label="A leather backpack with skills orbiting around it."
+            className="relative mx-auto h-72 w-full max-w-lg sm:h-[26rem]"
+            fallback={<BackpackFallback />}
+            scene={() => null}
+          />
+        </div>
+      </section>
+      <section className="border-y bg-muted/50" aria-labelledby="how-heading">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <h2 id="how-heading" className="font-display text-3xl font-semibold sm:text-4xl">
+            Three steps to your first result
+          </h2>
+          <ol className="mt-10 grid gap-10 md:grid-cols-3">
+            {STEPS.map(({ title, text }, index) => (
+              <li key={title} className="border-t-2 border-primary pt-5">
+                <StoryStepArt step={index + 1} />
+                <span className="mt-4 block font-display text-4xl font-semibold text-primary" aria-hidden>
+                  {index + 1}
+                </span>
+                <h3 className="mt-3 text-lg font-semibold">{title}</h3>
+                <p className="mt-1.5 max-w-xs text-muted-foreground">{text}</p>
+                {index === 1 && <SkillLegend />}
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+    </>
+  )
+}
+
+// The top of the page: the hero and "How it works" as one story
+function Story() {
+  const reducedMotion = useReducedMotion()
+  return !reducedMotion && webglSupported() ? <ScrollStory /> : <StaticStory />
+}
+
 // The public page at "/": what the product does and how to start. No login needed to see it.
 export default function LandingPage() {
   return (
@@ -149,55 +297,10 @@ export default function LandingPage() {
       </header>
 
       <main id="main">
-        {/* Hero */}
-        <section className="relative isolate overflow-hidden">
-          <HeroBackground />
-          <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:py-24">
-            <motion.div variants={staggerList} initial="hidden" animate="show">
-              <motion.h1 variants={staggerItem} className="text-[2.75rem] font-semibold leading-[1.05] sm:text-6xl">
-                Know where you stand before you apply.
-              </motion.h1>
-              <motion.p variants={staggerItem} className="mt-6 max-w-[34rem] text-lg leading-relaxed text-muted-foreground">
-                Job Assistant compares your resume with a job posting, shows the skills you already have and the ones
-                to work on, and drafts the cover letter.
-              </motion.p>
-              <motion.div variants={staggerItem} className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-                <MotionButton asChild className="h-12 px-6 text-base">
-                  <Link to="/register">
-                    Create your account <ArrowRight />
-                  </Link>
-                </MotionButton>
-                <Link to="/login" className="rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
-                  I already have an account
-                </Link>
-              </motion.div>
-              <motion.p variants={staggerItem} className="mt-6 text-sm text-muted-foreground">
-                The analysis runs on a local AI model, not on a cloud AI service.
-              </motion.p>
-            </motion.div>
-            {/* The 3D skill galaxy. Until its code has loaded (and without WebGL or with "reduce motion")
-                the static drawing of the same galaxy is shown, so this column is never empty. */}
-            <div>
-              <Lazy3D
-                label="A galaxy of skills connected by lines. Skills you have glow; skills you are missing are dimmer."
-                className="relative mx-auto h-72 w-full max-w-lg sm:h-[26rem]"
-                fallback={<GalaxyFallback />}
-                scene={(props) => <SkillGalaxy {...props} />}
-              />
-              <p className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-primary" /> Skills you have
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="size-2.5 rounded-full bg-muted ring-1 ring-foreground/25" /> Skills to learn
-                </span>
-              </p>
-            </div>
-          </div>
-        </section>
+        <Story />
 
         {/* What an analysis looks like */}
-        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pt-4 sm:px-6 lg:grid-cols-2" aria-labelledby="preview-heading">
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pt-16 sm:px-6 lg:grid-cols-2" aria-labelledby="preview-heading">
           <div className="flex justify-center lg:order-2 lg:justify-end">
             <PreviewCard />
           </div>
@@ -231,32 +334,6 @@ export default function LandingPage() {
               </motion.li>
             ))}
           </motion.ul>
-        </section>
-
-        {/* How it works: the order matters here, so the steps are numbered */}
-        <section className="border-y bg-muted/50" aria-labelledby="how-heading">
-          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-            <h2 id="how-heading" className="font-display text-3xl font-semibold sm:text-4xl">
-              Three steps to your first result
-            </h2>
-            <motion.ol
-              variants={staggerList}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true, margin: '-80px' }}
-              className="mt-10 grid gap-10 md:grid-cols-3"
-            >
-              {STEPS.map(({ title, text }, index) => (
-                <motion.li key={title} variants={staggerItem} className="border-t-2 border-primary pt-5">
-                  <span className="font-display text-4xl font-semibold text-primary" aria-hidden>
-                    {index + 1}
-                  </span>
-                  <h3 className="mt-3 text-lg font-semibold">{title}</h3>
-                  <p className="mt-1.5 max-w-xs text-muted-foreground">{text}</p>
-                </motion.li>
-              ))}
-            </motion.ol>
-          </div>
         </section>
 
         {/* Closing call to action */}
