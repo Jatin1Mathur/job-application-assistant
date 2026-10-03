@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: job-assistant
+
+  # Local secrets live in .env (not committed) - see .env.example
+  config:
+    import: optional:file:.env[.properties]
+
+  # PostgreSQL container from docker-compose.yml
+  datasource:
+    url: jdbc:postgresql://localhost:5432/jobassistant
+    username: jobuser
+    password: ${POSTGRES_PASSWORD}
+
+  # Redis container from docker-compose.yml
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+server:
+  port: 8080
