@@ -1,8 +1,7 @@
 import { ArrowUpRight } from 'lucide-react'
 
 const GITHUB_URL = 'https://github.com/Jatin1Mathur'
-// TODO: add the LinkedIn profile URL here. While it is empty, the LinkedIn link is not shown.
-const LINKEDIN_URL = ''
+const LINKEDIN_URL = 'https://www.linkedin.com/in/jatin-mathur-b04b122b'
 
 const link = 'inline-flex min-h-11 items-center gap-1 rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary'
 
@@ -28,12 +27,10 @@ export default function BuiltBy() {
           GitHub <ArrowUpRight className="size-4" aria-hidden />
           <span className="sr-only">(opens in a new tab)</span>
         </a>
-        {LINKEDIN_URL && (
-          <a href={LINKEDIN_URL} target="_blank" rel="noreferrer" className={link}>
-            LinkedIn <ArrowUpRight className="size-4" aria-hidden />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
-        )}
+        <a href={LINKEDIN_URL} target="_blank" rel="noreferrer" className={link}>
+          LinkedIn <ArrowUpRight className="size-4" aria-hidden />
+          <span className="sr-only">(opens in a new tab)</span>
+        </a>
       </p>
     </aside>
   )

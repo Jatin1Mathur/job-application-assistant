@@ -239,7 +239,7 @@ Three skills were named for this step (impeccable, design-taste-frontend, high-e
 | **Slider as a range input** | A before/after slider is often mouse-only. Here it is a normal range input under the picture, so touch, mouse and the arrow keys all work, and a screen reader announces it. |
 | **"How it's built" diagram** | Part of the audience are reviewers and other students. A diagram answers "what is this made of" faster than a list of logos. The dots show the direction a request travels. One sentence per part appears on hover, tap or keyboard focus, so nobody has to read five paragraphs. |
 | **The diagram is honest about the order** | The request was drawn as a chain (React, Spring Boot, PostgreSQL + Redis, Ollama). In the real system Spring Boot talks to all three directly, so the diagram shows three branches. |
-| **"Built by" card** | A name, a degree and a link to the code make a student project checkable. The LinkedIn link is prepared but hidden until its URL is filled in (`TODO` in `BuiltBy.tsx`), because a dead link is worse than no link. |
+| **"Built by" card** | A name, a degree and a link to the code make a student project checkable. It links to GitHub and LinkedIn. |
 | **Cursor-follow light** | A very soft warm light under the mouse in the hero makes the page react to the visitor without asking for a click. It is decoration, so it is not rendered on touch devices or with reduced motion. |
 | **Magnetic primary buttons** | The three primary buttons lean a few pixels towards the mouse. It makes the main action feel reachable and shows which button is the main one. Off on touch devices and with reduced motion. |
 
