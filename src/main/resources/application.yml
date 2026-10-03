@@ -12,6 +12,11 @@ spring:
     username: jobuser
     password: ${POSTGRES_PASSWORD}
 
+  # Flyway creates the tables (db/migration); Hibernate only checks they match the entities
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
   # Redis container from docker-compose.yml
   data:
     redis:
