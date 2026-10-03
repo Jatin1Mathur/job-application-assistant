@@ -48,9 +48,20 @@ public class AuthService {
 	public LoginResponse login(LoginRequest request) {
 		User user = userRepository.findByEmail(normalize(request.email()))
 			.orElseThrow(InvalidCredentialsException::new);
-		if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+		// The demo account has no password anyone knows. It is entered with demoLogin(), never with a password
+		if (user.isDemo() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
 			throw new InvalidCredentialsException();
 		}
+		return tokenFor(user);
+	}
+
+	// "Try with demo account": logs the visitor in as the shared demo user, without a password
+	public LoginResponse demoLogin() {
+		User demo = userRepository.findByDemoTrue().orElseThrow(DemoUnavailableException::new);
+		return tokenFor(demo);
+	}
+
+	private LoginResponse tokenFor(User user) {
 		return new LoginResponse(jwtService.generateToken(user.getId(), user.getEmail()), "Bearer",
 				jwtService.getExpiration().toSeconds());
 	}

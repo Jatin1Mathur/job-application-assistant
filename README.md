@@ -26,7 +26,8 @@ The frontend is a React + Vite + TypeScript app with Tailwind CSS in the `fronte
 
 What you can do in the app:
 
-- **Landing page** at `/` for visitors; logged-in users go straight to the dashboard.
+- **Landing page** at `/` for visitors, with a sample analysis you can try without an account; logged-in users go straight to the dashboard.
+- **Demo account**: "Try with demo account" on the login page opens a shared account with sample data (see below).
 - **Dashboard** as a card list or a **Kanban board** with drag and drop between status columns.
 - **Insights** with charts: applications by status, average match score, and the skills missing most often.
 - **Application page**: AI match analysis, cover letter, and a **Compare** tab that shows the resume and the job description side by side with matching and missing skills marked.
@@ -34,6 +35,16 @@ What you can do in the app:
 - **Command palette** with `Cmd+K` / `Ctrl+K`, and keyboard shortcuts (press `?` to see them).
 
 The dev server passes every `/api` call on to the backend on port 8080 (see `frontend/vite.config.ts`), so the backend needs no CORS settings.
+
+## The demo account
+
+When the backend starts, it creates one shared demo user (`demo@jobassistant.example`) with two sample resumes, six sample applications and five sample analyses. The sample analyses were written by hand and are labelled "sample data (not an AI result)".
+
+- Visitors enter it with the "Try with demo account" button, which calls `POST /api/auth/demo`. No email or password is sent.
+- The account has no password that anyone knows, and a normal login with its email is always refused.
+- The sample data is put back when the backend starts and every night at 03:00 (`demo.reset-cron` in `application.yml`).
+- The database refuses to delete the demo user or to change its email or password (trigger in migration `V5`).
+- Set `demo.enabled: false` in `application.yml` to switch the demo account off.
 
 ## Design
 

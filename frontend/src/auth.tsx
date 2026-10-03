@@ -9,10 +9,16 @@ interface AuthContextValue {
   notice: string | null
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string) => Promise<void>
+  // Enter the shared demo account, without an email or a password
+  demoLogin: () => Promise<void>
+  // True while the shared demo account is logged in
+  isDemo: boolean
   logout: () => void
 }
 
 const EMAIL_KEY = 'job-assistant.email'
+// The same address the backend gives the demo user (DemoAccountService.DEMO_EMAIL)
+const DEMO_EMAIL = 'demo@jobassistant.example'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -47,6 +53,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNotice(null)
   }, [])
 
+  const demoLogin = useCallback(async () => {
+    const result = await api.demoLogin()
+    tokenStore.set(result.token)
+    localStorage.setItem(EMAIL_KEY, DEMO_EMAIL)
+    setToken(result.token)
+    setEmail(DEMO_EMAIL)
+    setNotice(null)
+  }, [])
+
   const register = useCallback(
     async (emailInput: string, password: string) => {
       await api.register(emailInput, password)
@@ -61,8 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clear])
 
   const value = useMemo(
-    () => ({ token, email, notice, login, register, logout }),
-    [token, email, notice, login, register, logout],
+    () => ({ token, email, notice, login, register, demoLogin, isDemo: email === DEMO_EMAIL, logout }),
+    [token, email, notice, login, register, demoLogin, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

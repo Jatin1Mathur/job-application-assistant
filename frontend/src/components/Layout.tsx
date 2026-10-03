@@ -28,7 +28,7 @@ const bottomLink = ({ isActive }: { isActive: boolean }) =>
 
 // The frame around every page for logged-in users: navigation, search, theme toggle and log out
 export default function Layout({ children }: { children: ReactNode }) {
-  const { email, logout } = useAuth()
+  const { email, isDemo, logout } = useAuth()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
 
@@ -87,6 +87,15 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      {isDemo && (
+        <p className="border-b bg-encourage px-4 py-2 text-center text-sm text-encourage-foreground" role="note" data-testid="demo-banner">
+          You are in the shared demo account. Its sample data is put back every night, so nothing you change here is kept.{' '}
+          <Link to="/register" onClick={logout} className="font-semibold underline underline-offset-2">
+            Create your own account
+          </Link>
+        </p>
+      )}
 
       {/* pb-24 on phones leaves room for the bottom bar */}
       <main id="main" tabIndex={-1} className="relative mx-auto max-w-6xl px-4 pb-24 pt-8 outline-none sm:px-6 sm:pb-12">

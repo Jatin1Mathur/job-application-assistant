@@ -34,4 +34,10 @@ public class AuthController {
 		return authService.login(request);
 	}
 
+	// "Try with demo account": no email and no password, the visitor gets a token for the shared demo user
+	@PostMapping("/demo")
+	public LoginResponse demoLogin() {
+		return authService.demoLogin();
+	}
+
 }

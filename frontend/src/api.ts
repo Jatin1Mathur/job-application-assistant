@@ -145,6 +145,9 @@ export const api = {
   login: (email: string, password: string) =>
     request<LoginResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
+  // "Try with demo account": no email and no password, the backend answers with a token for the shared demo user
+  demoLogin: () => request<LoginResult>('/auth/demo', { method: 'POST' }),
+
   listResumes: () => request<ResumeSummary[]>('/resumes'),
 
   getResume: (id: number) => request<Resume>(`/resumes/${id}`),
