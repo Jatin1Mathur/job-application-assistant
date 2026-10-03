@@ -308,7 +308,7 @@ In dark mode shadows are nearly invisible, so depth comes from a slightly lighte
 
 ### Decorative depth
 
-The landing hero has three large, soft color washes (tide and sand) that drift slowly behind the content, and a 3D skill galaxy. Inside the app there is no decorative depth.
+The landing hero has three large, soft color washes (tide and sand) that drift slowly behind the content, and a 3D leather backpack with skills orbiting it. The backpack is lit with warm paper light, a sand-coloured bounce and a faint tide rim, so it belongs to the page. Inside the app there is no decorative depth.
 
 ## Shapes
 
@@ -327,7 +327,7 @@ Inner elements are tighter than their container. Pills are for small labels, nev
 
 ### Illustration
 
-There are no stock photos and no drawn illustrations. Pictures are either real product output (the example analysis) or geometry (the skill galaxy, the score orb, the skill universe).
+There are no stock photos and no drawn illustrations. Pictures are either real product output (the example analysis) or 3D objects built in code (the hero backpack with its orbiting skills, the score orb, the skill universe).
 
 ## Components
 

@@ -2,7 +2,7 @@ import { ArrowRight } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { lazy, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import GalaxyFallback from '../components/GalaxyFallback.tsx'
+import BackpackFallback from '../components/BackpackFallback.tsx'
 import Lazy3D from '../components/Lazy3D.tsx'
 import Logo from '../components/Logo.tsx'
 import MotionButton from '../components/MotionButton.tsx'
@@ -10,8 +10,8 @@ import ScoreRing from '../components/ScoreRing.tsx'
 import ThemeToggle from '../components/ThemeToggle.tsx'
 import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
 
-// The 3D code is a separate download that starts only when the galaxy is about to be shown
-const SkillGalaxy = lazy(() => import('../three/SkillGalaxy.tsx'))
+// The 3D code is a separate download that starts only when the hero scene is about to be shown
+const BackpackHero = lazy(() => import('../three/BackpackHero.tsx'))
 
 const FEATURES = [
   {
@@ -175,14 +175,14 @@ export default function LandingPage() {
                 The analysis runs on a local AI model, not on a cloud AI service.
               </motion.p>
             </motion.div>
-            {/* The 3D skill galaxy. Until its code has loaded (and without WebGL or with "reduce motion")
-                the static drawing of the same galaxy is shown, so this column is never empty. */}
+            {/* The 3D hero: a backpack (the career you carry with you) with skills orbiting it. Until its code has loaded (and without WebGL or with "reduce motion")
+                the static drawing of the same scene is shown, so this column is never empty. */}
             <div>
               <Lazy3D
-                label="A galaxy of skills connected by lines. Skills you have glow; skills you are missing are dimmer."
+                label="A leather backpack with skills orbiting around it. Skills you have glow; skills you are missing are dimmer."
                 className="relative mx-auto h-72 w-full max-w-lg sm:h-[26rem]"
-                fallback={<GalaxyFallback />}
-                scene={(props) => <SkillGalaxy {...props} />}
+                fallback={<BackpackFallback />}
+                scene={(props) => <BackpackHero {...props} />}
               />
               <p className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5">
