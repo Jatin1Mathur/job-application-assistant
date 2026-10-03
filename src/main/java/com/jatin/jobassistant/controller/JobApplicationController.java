@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
+import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.dto.UpdateStatusRequest;
 import com.jatin.jobassistant.entity.ApplicationStatus;
@@ -53,6 +54,12 @@ public class JobApplicationController {
 	@PatchMapping("/{id}/status")
 	public ApplicationResponse updateStatus(@PathVariable Long id, @Valid @RequestBody UpdateStatusRequest request) {
 		return jobApplicationService.updateStatus(id, request.status());
+	}
+
+	// Asks the AI how well the resume fits this job and stores the score on the application
+	@PostMapping("/{id}/analyze")
+	public MatchAnalysisResponse analyze(@PathVariable Long id, @RequestParam Long resumeId) {
+		return jobApplicationService.analyze(id, resumeId);
 	}
 
 	@DeleteMapping("/{id}")

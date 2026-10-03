@@ -29,6 +29,14 @@ spring:
       max-file-size: 5MB
       max-request-size: 6MB
 
+# Local AI model served by Ollama (https://ollama.com)
+ai:
+  ollama:
+    base-url: http://localhost:11434
+    model: llama3.2
+    # Local models are slow, so wait a long time for the answer
+    timeout: 180s
+
 server:
   port: 8080
   tomcat:

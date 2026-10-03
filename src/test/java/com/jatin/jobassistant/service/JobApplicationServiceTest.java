@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
@@ -25,16 +26,25 @@ import org.springframework.data.domain.Sort;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
+import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.entity.JobApplication;
+import com.jatin.jobassistant.entity.Resume;
 import com.jatin.jobassistant.repository.JobApplicationRepository;
+import com.jatin.jobassistant.repository.ResumeRepository;
 
 @ExtendWith(MockitoExtension.class)
 class JobApplicationServiceTest {
 
 	@Mock
 	private JobApplicationRepository jobApplicationRepository;
+
+	@Mock
+	private ResumeRepository resumeRepository;
+
+	@Mock
+	private AiService aiService;
 
 	@InjectMocks
 	private JobApplicationService jobApplicationService;
@@ -144,6 +154,73 @@ class JobApplicationServiceTest {
 
 		assertThatThrownBy(() -> jobApplicationService.delete(99L)).isInstanceOf(ApplicationNotFoundException.class);
 		verify(jobApplicationRepository, never()).delete(any());
+	}
+
+	@Test
+	void analyzeSendsTextsToTheAiAndSavesTheScore() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription("Java and Spring Boot");
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		MatchAnalysisResponse analysis = new MatchAnalysisResponse(80, List.of("Java"), List.of("Spring Boot"),
+				List.of("tip 1", "tip 2", "tip 3"));
+		when(aiService.analyzeMatch("I know Java", "Java and Spring Boot")).thenReturn(analysis);
+
+		MatchAnalysisResponse response = jobApplicationService.analyze(7L, 2L);
+
+		assertThat(response).isEqualTo(analysis);
+		assertThat(application.getMatchScore()).isEqualTo(80);
+		verify(jobApplicationRepository).save(application);
+	}
+
+	@Test
+	void analyzeThrowsWhenApplicationDoesNotExist() {
+		when(jobApplicationRepository.findById(99L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(99L, 2L))
+			.isInstanceOf(ApplicationNotFoundException.class);
+		verifyNoInteractions(aiService);
+	}
+
+	@Test
+	void analyzeThrowsWhenResumeDoesNotExist() {
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findById(99L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 99L)).isInstanceOf(ResumeNotFoundException.class);
+		verifyNoInteractions(aiService);
+	}
+
+	@Test
+	void analyzeThrowsWhenApplicationHasNoJobDescription() {
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L))
+			.isInstanceOf(InvalidAnalysisRequestException.class)
+			.hasMessageContaining("job description");
+		verifyNoInteractions(aiService);
+	}
+
+	@Test
+	void analyzeDoesNotSaveAScoreWhenTheAiFails() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription("Java and Spring Boot");
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(aiService.analyzeMatch(any(), any())).thenThrow(new AiUnavailableException("down", null));
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L)).isInstanceOf(AiUnavailableException.class);
+		assertThat(application.getMatchScore()).isNull();
+		verify(jobApplicationRepository, never()).save(any());
+	}
+
+	private Resume resume(Long id, String text) {
+		Resume resume = new Resume();
+		resume.setId(id);
+		resume.setFileName("resume.pdf");
+		resume.setExtractedText(text);
+		return resume;
 	}
 
 	private JobApplication application(Long id, ApplicationStatus status) {

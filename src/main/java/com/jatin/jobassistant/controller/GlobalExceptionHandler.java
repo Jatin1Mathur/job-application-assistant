@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -18,7 +19,11 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 
 import com.jatin.jobassistant.dto.ErrorResponse;
+import com.jatin.jobassistant.service.AiTimeoutException;
+import com.jatin.jobassistant.service.AiUnavailableException;
 import com.jatin.jobassistant.service.ApplicationNotFoundException;
+import com.jatin.jobassistant.service.InvalidAiResponseException;
+import com.jatin.jobassistant.service.InvalidAnalysisRequestException;
 import com.jatin.jobassistant.service.InvalidFileException;
 import com.jatin.jobassistant.service.ResumeNotFoundException;
 
@@ -28,8 +33,8 @@ import tools.jackson.databind.exc.InvalidFormatException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-	@ExceptionHandler(InvalidFileException.class)
-	public ResponseEntity<ErrorResponse> handleInvalidFile(InvalidFileException ex) {
+	@ExceptionHandler({ InvalidFileException.class, InvalidAnalysisRequestException.class })
+	public ResponseEntity<ErrorResponse> handleInvalidRequest(RuntimeException ex) {
 		return error(HttpStatus.BAD_REQUEST, ex.getMessage());
 	}
 
@@ -53,6 +58,28 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleWrongContentType(HttpMediaTypeNotSupportedException ex) {
 		return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
 				"Unsupported Content-Type. Use one of: " + ex.getSupportedMediaTypes());
+	}
+
+	// The AI server (Ollama) is not running or answered with an error
+	@ExceptionHandler(AiUnavailableException.class)
+	public ResponseEntity<ErrorResponse> handleAiUnavailable(AiUnavailableException ex) {
+		return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+	}
+
+	@ExceptionHandler(AiTimeoutException.class)
+	public ResponseEntity<ErrorResponse> handleAiTimeout(AiTimeoutException ex) {
+		return error(HttpStatus.GATEWAY_TIMEOUT, ex.getMessage());
+	}
+
+	// The AI answered, but not with the JSON we asked for
+	@ExceptionHandler(InvalidAiResponseException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidAiResponse(InvalidAiResponseException ex) {
+		return error(HttpStatus.BAD_GATEWAY, ex.getMessage());
+	}
+
+	@ExceptionHandler(MissingServletRequestParameterException.class)
+	public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException ex) {
+		return error(HttpStatus.BAD_REQUEST, ex.getParameterName() + " is required");
 	}
 
 	// A @Valid request body failed its checks, e.g. companyName is blank
