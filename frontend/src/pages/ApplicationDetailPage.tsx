@@ -1,10 +1,13 @@
-import { ArrowLeft, Check, Columns2, Copy, FileText, Lightbulb, Loader2, PenLine, Sparkles, Trash2, Zap } from 'lucide-react'
+import { ArrowLeft, Check, Columns2, Copy, Download, FileText, History, Lightbulb, Loader2, PenLine, Sparkles, Trash2, Zap } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { api, errorMessage, STATUSES } from '../api.ts'
-import type { Application, ApplicationStatus, MatchAnalysis, ResumeSummary } from '../api.ts'
+import { api, errorMessage, STATUSES, TONES } from '../api.ts'
+import type { Application, ApplicationStatus, CoverLetterTone, MatchAnalysis, ResumeSummary } from '../api.ts'
+import NotesAndInterview from '../components/detail/NotesAndInterview.tsx'
+import StatusTimeline from '../components/detail/StatusTimeline.tsx'
+import ToneSelector from '../components/detail/ToneSelector.tsx'
 import AiSteps from '../components/AiSteps.tsx'
 import AnimatedTabsList from '../components/AnimatedTabsList.tsx'
 import HighlightedText from '../components/HighlightedText.tsx'
@@ -114,6 +117,9 @@ export default function ApplicationDetailPage() {
   const [writing, setWriting] = useState(false)
   const [letterError, setLetterError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // The tone for the next letter. Starts with the tone of the stored letter, once that is known.
+  const [tone, setTone] = useState<CoverLetterTone>('FORMAL')
+  const [exporting, setExporting] = useState(false)
 
   usePageTitle(application ? `${application.jobTitle} at ${application.companyName}` : 'Application')
 
@@ -125,6 +131,7 @@ export default function ApplicationDetailPage() {
       .then(([loadedApplication, loadedResumes]) => {
         setApplication(loadedApplication)
         setAnalysis(loadedApplication.analysis)
+        if (loadedApplication.coverLetterTone) setTone(loadedApplication.coverLetterTone)
         setResumes(loadedResumes)
         // Start with the resume of the last analysis, if it still exists; otherwise the newest one
         const analyzedResume = loadedResumes.find((resume) => resume.id === loadedApplication.analysis?.resumeId)
@@ -161,14 +168,34 @@ export default function ApplicationDetailPage() {
     setLetterError(null)
     setWriting(true)
     try {
-      const result = await api.generateCoverLetter(id, resumeId)
-      setApplication((current) => current && { ...current, coverLetter: result.coverLetter })
+      const result = await api.generateCoverLetter(id, resumeId, tone)
+      setApplication((current) => current && { ...current, coverLetter: result.coverLetter, coverLetterTone: result.tone })
       toast.success('Cover letter drafted')
     } catch (err) {
       setLetterError(errorMessage(err))
       toast.error('Could not write the cover letter', { description: errorMessage(err) })
     } finally {
       setWriting(false)
+    }
+  }
+
+  // Asks the backend for the letter as a PDF and hands it to the browser as a download
+  async function exportCoverLetter() {
+    if (!application) return
+    setExporting(true)
+    try {
+      const pdf = await api.getCoverLetterPdf(id)
+      const url = URL.createObjectURL(pdf)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `cover-letter-${application.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'application'}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+      toast.success('PDF downloaded')
+    } catch (err) {
+      toast.error('Could not export the PDF', { description: errorMessage(err) })
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -422,23 +449,33 @@ export default function ApplicationDetailPage() {
                   Drafted from the facts in your resume. Nothing is invented.
                 </p>
               </div>
-              <div className="flex gap-2">
-                {application.coverLetter && !writing && (
+              {application.coverLetter && !writing && (
+                <div className="flex gap-2">
                   <MotionButton variant="outline" size="lg" onClick={copyCoverLetter}>
                     {copied ? <Check className="text-emerald-500" /> : <Copy />}
                     {copied ? 'Copied' : 'Copy'}
                   </MotionButton>
-                )}
-                <MotionButton
-                  size="lg"
-                  variant={score !== null && !application.coverLetter ? 'default' : 'outline'}
-                  disabled={noResume || busy}
-                  onClick={writeCoverLetter}
-                >
-                  {writing ? <Loader2 className="animate-spin" /> : <PenLine />}
-                  {writing ? 'Writing…' : application.coverLetter ? 'Generate again' : 'Generate cover letter'}
-                </MotionButton>
-              </div>
+                  <MotionButton variant="outline" size="lg" onClick={exportCoverLetter} disabled={exporting} data-testid="export-pdf">
+                    {exporting ? <Loader2 className="animate-spin" /> : <Download />}
+                    Export PDF
+                  </MotionButton>
+                </div>
+              )}
+            </div>
+
+            {/* Choose the tone, then generate. With a letter already there, the button writes a new one. */}
+            <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-lg bg-muted/50 p-3.5">
+              <ToneSelector value={tone} onChange={setTone} disabled={noResume || busy} />
+              <MotionButton
+                size="lg"
+                variant={score !== null && !application.coverLetter ? 'default' : 'outline'}
+                disabled={noResume || busy}
+                onClick={writeCoverLetter}
+                data-testid="generate-letter"
+              >
+                {writing ? <Loader2 className="animate-spin" /> : <PenLine />}
+                {writing ? 'Writing…' : application.coverLetter ? 'Regenerate' : 'Generate cover letter'}
+              </MotionButton>
             </div>
 
             <AnimatePresence initial={false}>
@@ -466,8 +503,9 @@ export default function ApplicationDetailPage() {
                   {application.coverLetter}
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {application.coverLetter.trim().split(/\s+/).length} words · Read it through and check the facts
-                  before you send it.
+                  {application.coverLetter.trim().split(/\s+/).length} words
+                  {application.coverLetterTone && `, ${TONES.find((item) => item.value === application.coverLetterTone)?.label.toLowerCase()} tone`}. Read it through and
+                  check the facts before you send it.
                 </p>
               </motion.div>
             )}
@@ -478,11 +516,24 @@ export default function ApplicationDetailPage() {
               </p>
             )}
           </motion.section>
+
+          {/* Notes and interview date. The key resets the fields when another application is opened. */}
+          <motion.section variants={staggerItem} className={section}>
+            <NotesAndInterview key={application.id} application={application} onSaved={setApplication} />
+          </motion.section>
         </div>
 
         {/* The two things being compared: the resume and the job description */}
         <motion.aside variants={staggerItem} className="min-w-0 lg:col-span-2">
           <div className={`${section} space-y-6 lg:sticky lg:top-24`}>
+            {application.statusHistory.length > 0 && (
+              <section className="border-b pb-5">
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                  <History className="size-4 text-muted-foreground" aria-hidden /> Status timeline
+                </h2>
+                <StatusTimeline history={application.statusHistory} />
+              </section>
+            )}
             <section>
               <h2 className="flex items-center gap-2 text-sm font-semibold">
                 <FileText className="size-4 text-muted-foreground" /> Resume used

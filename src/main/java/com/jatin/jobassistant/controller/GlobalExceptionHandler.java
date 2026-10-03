@@ -22,6 +22,7 @@ import com.jatin.jobassistant.dto.ErrorResponse;
 import com.jatin.jobassistant.service.AiTimeoutException;
 import com.jatin.jobassistant.service.AiUnavailableException;
 import com.jatin.jobassistant.service.ApplicationNotFoundException;
+import com.jatin.jobassistant.service.DemoAccountLockedException;
 import com.jatin.jobassistant.service.DemoUnavailableException;
 import com.jatin.jobassistant.service.EmailAlreadyUsedException;
 import com.jatin.jobassistant.service.InvalidAiResponseException;
@@ -55,6 +56,12 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(DemoUnavailableException.class)
 	public ResponseEntity<ErrorResponse> handleDemoUnavailable(DemoUnavailableException ex) {
 		return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+	}
+
+	// Someone in the shared demo account tried to change something that is fixed there
+	@ExceptionHandler(DemoAccountLockedException.class)
+	public ResponseEntity<ErrorResponse> handleDemoLocked(DemoAccountLockedException ex) {
+		return error(HttpStatus.FORBIDDEN, ex.getMessage());
 	}
 
 	// Wrong email or password at login

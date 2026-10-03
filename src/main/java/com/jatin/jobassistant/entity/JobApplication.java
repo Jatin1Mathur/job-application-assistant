@@ -50,6 +50,22 @@ public class JobApplication {
 	@Column(columnDefinition = "text")
 	private String coverLetter;
 
+	// How the stored cover letter was asked to sound; null when there is no letter or it is older than this field
+	@Enumerated(EnumType.STRING)
+	@Column(length = 20)
+	private CoverLetterTone coverLetterTone;
+
+	// The user's own notes about this application
+	@Column(columnDefinition = "text")
+	private String notes;
+
+	// When the interview takes place, if one is planned
+	private Instant interviewAt;
+
+	// When the application got its current status: the start of "days in this stage"
+	@Column(nullable = false)
+	private Instant statusChangedAt;
+
 	@CreationTimestamp
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;

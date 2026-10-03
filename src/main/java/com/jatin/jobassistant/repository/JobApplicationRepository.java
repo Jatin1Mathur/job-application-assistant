@@ -20,6 +20,9 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
 
 	Page<JobApplication> findByUserIdAndStatus(Long userId, ApplicationStatus status, Pageable pageable);
 
+	// All applications of this user, for the dashboard and the insights
+	List<JobApplication> findByUserId(Long userId);
+
 	// How many applications this user has in each status
 	@Query("select a.status as status, count(a) as total from JobApplication a where a.userId = :userId group by a.status")
 	List<StatusCount> countByStatus(Long userId);

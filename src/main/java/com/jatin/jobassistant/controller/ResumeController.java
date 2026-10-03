@@ -1,5 +1,9 @@
 package com.jatin.jobassistant.controller;
 
+import com.jatin.jobassistant.service.ResumeService.ResumeFileContent;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import java.time.Duration;
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
@@ -44,6 +48,17 @@ public class ResumeController {
 	@GetMapping("/{id}")
 	public ResumeResponse getById(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
 		return resumeService.getById(CurrentUser.id(jwt), id);
+	}
+
+	// The uploaded PDF itself, shown in the browser (first page as a preview)
+	@GetMapping(value = "/{id}/file", produces = MediaType.APPLICATION_PDF_VALUE)
+	public ResponseEntity<byte[]> getFile(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+		ResumeFileContent file = resumeService.getFile(CurrentUser.id(jwt), id);
+		return ResponseEntity.ok()
+			.contentType(MediaType.APPLICATION_PDF)
+			// The file never changes, so the browser may keep it; "private" because it belongs to one user
+			.cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePrivate())
+			.body(file.data());
 	}
 
 }

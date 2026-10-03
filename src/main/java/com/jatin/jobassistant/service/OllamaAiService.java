@@ -1,5 +1,6 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.entity.CoverLetterTone;
 import java.net.SocketTimeoutException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
@@ -29,6 +30,9 @@ public class OllamaAiService implements AiService {
 
 	static final int COVER_LETTER_MAX_WORDS = 300;
 
+	// Above 0, so that "regenerate" gives a letter with different wording instead of the same one again
+	static final double COVER_LETTER_TEMPERATURE = 0.6;
+
 	private static final String MATCH_SYSTEM_PROMPT = """
 			You are an experienced technical recruiter. You compare a candidate's resume with a job description.
 			Reply with JSON only, no other text, in exactly this shape:
@@ -54,8 +58,7 @@ public class OllamaAiService implements AiService {
 			- Keep the facts exactly as the resume states them. For example, a student is not a graduate.
 			- Say nothing about the company that is not in the job posting.
 			- Mention the company name and the job title exactly as given.
-			- Professional, confident and friendly tone.
-			- At most 250 words, in 3 or 4 short paragraphs.
+			%s
 			- Start with "Dear Hiring Manager," and end with "Sincerely," followed by the applicant's name from the resume.
 			- No placeholders in brackets such as [Your Name] or [Date]. No address block, no subject line.
 			- Reply with the cover letter only, as plain text. No introduction, no notes, no markdown.
@@ -100,7 +103,7 @@ public class OllamaAiService implements AiService {
 
 	@Override
 	public String generateCoverLetter(String resumeText, String jobTitle, String companyName,
-			String jobDescription) {
+			String jobDescription, CoverLetterTone tone) {
 		String userPrompt = """
 				COMPANY NAME: %s
 				JOB TITLE: %s
@@ -111,7 +114,9 @@ public class OllamaAiService implements AiService {
 				RESUME:
 				%s
 				""".formatted(companyName, jobTitle, jobDescription.strip(), resumeText.strip());
-		String coverLetter = chat(COVER_LETTER_SYSTEM_PROMPT, userPrompt, false).strip();
+		String coverLetter = chat(COVER_LETTER_SYSTEM_PROMPT.formatted(toneRules(tone)), userPrompt, false,
+				COVER_LETTER_TEMPERATURE)
+			.strip();
 		if (coverLetter.isEmpty()) {
 			throw new InvalidAiResponseException("The AI returned an empty answer. Please try again", null);
 		}
@@ -124,11 +129,31 @@ public class OllamaAiService implements AiService {
 		return coverLetter;
 	}
 
+	// The two lines of the prompt that differ between the tones
+	static String toneRules(CoverLetterTone tone) {
+		return switch (tone) {
+			case FORMAL -> """
+					- Formal and professional tone. Full sentences, no contractions such as "I'm", no exclamation marks.
+					- At most 250 words, in 3 or 4 short paragraphs.""";
+			case FRIENDLY -> """
+					- Warm, friendly and personal tone, still professional. Contractions such as "I'm" are welcome.
+					- At most 250 words, in 3 or 4 short paragraphs.""";
+			case SHORT -> """
+					- Direct and to the point. Professional tone.
+					- At most 120 words, in 2 short paragraphs. Name only the two or three most relevant facts.""";
+		};
+	}
+
 	private String chat(String systemPrompt, String userPrompt, boolean jsonMode) {
+		// 0: the same input gives (nearly) the same answer. Right for the analysis, which is also cached.
+		return chat(systemPrompt, userPrompt, jsonMode, 0);
+	}
+
+	private String chat(String systemPrompt, String userPrompt, boolean jsonMode, double temperature) {
 		Map<String, Object> request = new HashMap<>();
 		request.put("model", model);
 		request.put("stream", false); // one complete answer instead of word-by-word chunks
-		request.put("options", Map.of("temperature", 0)); // same input gives (nearly) the same answer
+		request.put("options", Map.of("temperature", temperature));
 		request.put("messages", List.of(Map.of("role", "system", "content", systemPrompt),
 				Map.of("role", "user", "content", userPrompt)));
 		if (jsonMode) {

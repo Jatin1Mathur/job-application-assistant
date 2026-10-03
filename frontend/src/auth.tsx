@@ -8,7 +8,7 @@ interface AuthContextValue {
   // Set when the user was logged out because the token expired
   notice: string | null
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, name?: string) => Promise<void>
   // Enter the shared demo account, without an email or a password
   demoLogin: () => Promise<void>
   // True while the shared demo account is logged in
@@ -63,8 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(
-    async (emailInput: string, password: string) => {
-      await api.register(emailInput, password)
+    async (emailInput: string, password: string, name?: string) => {
+      await api.register(emailInput, password, name)
       await login(emailInput, password)
     },
     [login],

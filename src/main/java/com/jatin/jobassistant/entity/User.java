@@ -28,6 +28,10 @@ public class User {
 	@Column(nullable = false, unique = true)
 	private String email;
 
+	// Optional. Used for the greeting on the dashboard
+	@Column(length = 100)
+	private String name;
+
 	// BCrypt hash of the password. The plain password is never stored
 	@Column(nullable = false, length = 100)
 	private String passwordHash;

@@ -12,12 +12,19 @@ public record RegisterRequest(
 
 		// BCrypt only looks at the first 72 bytes, so longer passwords are not allowed
 		@NotNull(message = "password is required")
-		@Size(min = 8, max = 72, message = "password must be between 8 and 72 characters") String password) {
+		@Size(min = 8, max = 72, message = "password must be between 8 and 72 characters") String password,
+		// Optional. Shown in the greeting on the dashboard
+		@Size(max = 100, message = "name must be at most 100 characters") String name) {
+
+	public RegisterRequest(String email, String password) {
+		this(email, password, null);
+	}
+
 
 	// Keeps the password out of logs if this object is ever printed
 	@Override
 	public String toString() {
-		return "RegisterRequest[email=" + email + ", password=***]";
+		return "RegisterRequest[email=" + email + ", password=***, name=" + name + "]";
 	}
 
 }

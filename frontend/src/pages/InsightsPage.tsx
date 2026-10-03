@@ -1,12 +1,14 @@
-import { BarChart3, Lightbulb, Sparkles } from 'lucide-react'
+import { Lightbulb, Sparkles, Trophy } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, errorMessage, STATUSES } from '../api.ts'
 import type { Insights } from '../api.ts'
 import AnimatedNumber from '../components/AnimatedNumber.tsx'
 import ChartReveal from '../components/ChartReveal.tsx'
 import EmptyState from '../components/EmptyState.tsx'
+import { TelescopeArt } from '../components/illustrations.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import PageTransition from '../components/PageTransition.tsx'
@@ -65,6 +67,53 @@ function HiddenTable({ caption, rows, valueHeader }: { caption: string; rows: { 
   )
 }
 
+// "2026-09-14" -> "14 Sep". Parsed by hand, so the browser's time zone cannot shift the day.
+function weekLabel(date: string): string {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+const FUNNEL_TEXT: Record<string, { name: string; of: string }> = {
+  SAVED: { name: 'Saved', of: '' },
+  APPLIED: { name: 'Sent', of: 'of saved were sent' },
+  INTERVIEW: { name: 'Interview', of: 'of sent led to an interview' },
+  OFFER: { name: 'Offer', of: 'of interviews led to an offer' },
+}
+
+// From saved to offer: how many applications ever reached each stage, and what share of the stage before that is.
+// Each bar is as wide as its share of all applications and grows in when it scrolls into view.
+function Funnel({ stages }: { stages: Insights['funnel'] }) {
+  const most = Math.max(1, ...stages.map((stage) => stage.applications))
+  return (
+    <ol className="mt-5 space-y-3" data-testid="funnel">
+      {stages.map((stage, index) => {
+        const text = FUNNEL_TEXT[stage.stage]
+        return (
+          <li key={stage.stage} className="grid grid-cols-[5.5rem_1fr] items-center gap-x-3 gap-y-0.5 sm:grid-cols-[6.5rem_1fr]" data-stage={stage.stage}>
+            <span className="text-sm font-medium">{text.name}</span>
+            <div className="flex items-center gap-2.5">
+              <motion.span
+                className="block h-7 min-w-1 rounded-md bg-primary"
+                style={{ width: `${(stage.applications / most) * 100}%`, transformOrigin: 'left', opacity: 1 - index * 0.16 }}
+                initial={{ scaleX: 0 }}
+                whileInView={{ scaleX: 1 }}
+                viewport={{ once: true, margin: '-40px' }}
+                transition={{ duration: 0.45, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              />
+              <span className="text-sm font-semibold tabular-nums">{stage.applications}</span>
+            </div>
+            {stage.rateFromPrevious !== null && (
+              <span className="col-start-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{Math.round(stage.rateFromPrevious)}%</span> {text.of}
+              </span>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 export default function InsightsPage() {
   usePageTitle('Insights')
   const [insights, setInsights] = useState<Insights | null>(null)
@@ -106,7 +155,7 @@ export default function InsightsPage() {
         <h1 className="text-2xl font-semibold sm:text-3xl">Insights</h1>
         <div className="mt-6">
           <EmptyState
-            icon={BarChart3}
+            art={<TelescopeArt />}
             title="No insights yet"
             description="Once you have added and analyzed an application, this page shows where your applications stand and which skills come up most."
             action={
@@ -124,6 +173,10 @@ export default function InsightsPage() {
   const skillRows = insights.topMissingSkills.map((item) => ({ name: item.skill, value: item.applications }))
   const topSkill = insights.topMissingSkills[0]
   const average = insights.averageMatchScore
+  const weekRows = insights.scoreByWeek.map((week) => ({ name: `Week of ${weekLabel(week.weekStart)}`, tick: weekLabel(week.weekStart), value: week.averageScore, analyses: week.analyses }))
+  const categoryRows = insights.skillCategories.map((category) => ({ ...category, name: category.category, value: category.matchRate }))
+  const bestResume = insights.scoreByResume[0]
+  const otherResumes = insights.scoreByResume.slice(1)
 
   return (
     <PageTransition>
@@ -174,6 +227,131 @@ export default function InsightsPage() {
                 Exact average: {average}
               </p>
             </div>
+          )}
+        </section>
+
+        {/* From saved to offer */}
+        <section className={`${card} min-w-0 lg:col-span-2`} aria-labelledby="funnel-heading">
+          <h2 id="funnel-heading" className="text-base font-semibold">
+            From saved to offer
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">How many applications ever reached each stage, also if they were rejected later.</p>
+          <Funnel stages={insights.funnel} />
+        </section>
+
+        {/* Best resume */}
+        <section className={`${card} min-w-0`} aria-labelledby="resume-heading" data-testid="best-resume">
+          <h2 id="resume-heading" className="text-base font-semibold">
+            Best resume
+          </h2>
+          {!bestResume ? (
+            <p className="mt-3 text-sm text-muted-foreground">Analyze an application to see which resume scores best.</p>
+          ) : (
+            <motion.div initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-40px' }} transition={{ duration: 0.35 }}>
+              <p className="mt-0.5 text-sm text-muted-foreground">The resume with the highest average match score.</p>
+              <div className="mt-4 flex items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-encourage text-encourage-foreground">
+                  <Trophy className="size-5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold" title={bestResume.fileName}>
+                    {bestResume.fileName}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    <span className={`font-semibold tabular-nums ${scoreTone(bestResume.averageScore).text}`}>{bestResume.averageScore}</span> on average, from{' '}
+                    {bestResume.analyses} {bestResume.analyses === 1 ? 'analysis' : 'analyses'}
+                  </p>
+                </div>
+              </div>
+              {otherResumes.length === 0 ? (
+                <p className="mt-4 text-xs text-muted-foreground">Only this resume has been used for an analysis so far, so there is nothing to compare it with.</p>
+              ) : (
+                <ul className="mt-4 space-y-1.5 border-t pt-3 text-sm">
+                  {otherResumes.map((resume) => (
+                    <li key={resume.resumeId} className="flex items-baseline justify-between gap-3">
+                      <span className="truncate text-muted-foreground" title={resume.fileName}>
+                        {resume.fileName}
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        {resume.averageScore} <span className="text-xs text-muted-foreground">({resume.analyses})</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {bestResume.analyses < 3 && <p className="mt-3 text-xs text-muted-foreground">Based on few analyses. The jobs differ too, so read this as a hint.</p>}
+            </motion.div>
+          )}
+        </section>
+
+        {/* Score over time */}
+        <section className={`${card} min-w-0 lg:col-span-2`} aria-labelledby="trend-heading">
+          <h2 id="trend-heading" className="text-base font-semibold">
+            Match score over time
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">The average score of the analyses made in each week. Weeks without an analysis are left out.</p>
+          {weekRows.length === 0 ? (
+            <p className="mt-5 rounded-xl bg-muted/60 px-4 py-3.5 text-sm text-muted-foreground">Nothing analyzed yet.</p>
+          ) : (
+            <>
+              <ChartReveal direction="up" className="mt-4 h-56" data-testid="trend-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={weekRows} margin={{ top: 20, right: 16, bottom: 0, left: -20 }}>
+                    <CartesianGrid vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="tick" tick={axisTick} tickLine={false} axisLine={{ stroke: 'var(--border)' }} padding={{ left: 16, right: 16 }} />
+                    <YAxis domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} tick={axisTick} tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{ stroke: 'var(--border)' }} content={<ChartTooltip unit="point" />} />
+                    {/* Straight lines between the weeks: a curve would suggest values that were never measured */}
+                    <Line type="linear" dataKey="value" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4, fill: 'var(--primary)', stroke: 'var(--card)', strokeWidth: 2 }} activeDot={{ r: 6 }} isAnimationActive={false}>
+                      <LabelList dataKey="value" position="top" offset={10} style={valueLabel} />
+                    </Line>
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartReveal>
+              {weekRows.length === 1 && <p className="mt-2 text-xs text-muted-foreground">One week of data so far. A line appears once a second week has an analysis.</p>}
+              <HiddenTable caption="Average match score per week" rows={weekRows} valueHeader="Average score" />
+            </>
+          )}
+        </section>
+
+        {/* Skills by category */}
+        <section className={`${card} min-w-0`} aria-labelledby="radar-heading">
+          <h2 id="radar-heading" className="text-base font-semibold">
+            Skills by category
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">Of the skills the jobs asked for in each category: how many percent your resume showed.</p>
+          {categoryRows.length === 0 ? (
+            <p className="mt-5 rounded-xl bg-muted/60 px-4 py-3.5 text-sm text-muted-foreground">Nothing analyzed yet.</p>
+          ) : (
+            <>
+              {/* A radar needs at least three corners. With fewer categories the list below is the whole picture. */}
+              {categoryRows.length >= 3 && (
+                <ChartReveal direction="in" className="mt-2 h-56" data-testid="radar-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={categoryRows} outerRadius="62%">
+                      <PolarGrid stroke="var(--border)" />
+                      {/* Only the first word around the chart ("Cloud", "Tools"), so no label is cut off. The full names are in the list below. */}
+                      <PolarAngleAxis dataKey="name" tick={{ ...axisTick, fontSize: 11 }} tickFormatter={(name: string) => name.split(' ')[0]} />
+                      <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                      <Radar dataKey="value" stroke="var(--primary)" strokeWidth={2} fill="var(--primary)" fillOpacity={0.22} isAnimationActive={false} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </ChartReveal>
+              )}
+              <ul className="mt-3 space-y-1 text-sm" data-testid="category-list">
+                {categoryRows.map((category) => (
+                  <li key={category.name} className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-muted-foreground">{category.name}</span>
+                    <span className="shrink-0 tabular-nums">
+                      <span className="font-semibold">{Math.round(category.matchRate)}%</span>{' '}
+                      <span className="text-xs text-muted-foreground">
+                        ({category.matching} of {category.matching + category.missing})
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
 

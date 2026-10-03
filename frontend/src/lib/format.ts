@@ -13,6 +13,12 @@ export function scoreTone(score: number) {
   return { label: 'Weak match', text: 'text-rose-700 dark:text-rose-400', stroke: 'stroke-rose-500' }
 }
 
+// Whole calendar days from that moment until today (0 = today)
+export function daysSince(iso: string): number {
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  return Math.max(0, Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86_400_000))
+}
+
 // "today", "yesterday", "5 days ago", and a normal date once it is more than two weeks ago.
 // For a job hunt, how long ago something happened matters more than the exact day.
 export function formatRelativeDate(iso: string): string {

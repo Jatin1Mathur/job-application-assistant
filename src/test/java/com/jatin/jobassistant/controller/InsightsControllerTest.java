@@ -1,5 +1,7 @@
 package com.jatin.jobassistant.controller;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -49,8 +51,9 @@ class InsightsControllerTest {
 		byStatus.put(ApplicationStatus.INTERVIEW, 0L);
 		byStatus.put(ApplicationStatus.OFFER, 0L);
 		byStatus.put(ApplicationStatus.REJECTED, 0L);
-		when(insightsService.getInsights(USER_ID)).thenReturn(new InsightsResponse(3, byStatus, 2, 72.5,
-				List.of(new SkillCount("Docker", 2), new SkillCount("Kubernetes", 1))));
+		when(insightsService.getInsights(eq(USER_ID), any())).thenReturn(new InsightsResponse(3, byStatus, 2, 72.5,
+				List.of(new SkillCount("Docker", 2), new SkillCount("Kubernetes", 1)), List.of(), List.of(), List.of(),
+				List.of()));
 
 		mockMvc
 			.perform(get("/api/insights").header("Authorization",

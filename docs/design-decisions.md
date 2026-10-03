@@ -272,12 +272,84 @@ What I changed in the order of the page: the hero keeps its 3D story, and the de
 - **Contrast:** text on the teal panel is white or 75% white on a dark teal; the warning and error texts use the dark shades of amber and red.
 - **Loading:** the login page downloads the 3D code only on wide screens, where the side panel is visible. Phones never load it. The new home sections are plain HTML and SVG and add no library.
 
-## 10. What I have not done
+## 10. The app after login (step 17)
+
+Screenshots of every page before and after are in `docs/screenshots/app/` (desktop and phone, light and dark; with the demo account for filled pages and with a new account for the empty states).
+
+One rule for the whole step: **only real data.** Every number on these pages is counted from the user's own rows. Where a number cannot be calculated yet (no application sent, nothing analyzed), the page says so in words instead of showing 0 or 0%. The demo account is the one exception, and it is labelled.
+
+### Visual variety
+
+| Change | The UX reason |
+|---|---|
+| **Backpack only on the home page** | An object that appears everywhere stops meaning anything. The backpack is the picture of the landing page; inside the product it would be decoration. |
+| **Compass on the login page** | Logging in is "finding your way back in". The needle drifts while you type and swings to north when the login succeeds, so the picture confirms the same thing as the check mark. It is built in code from simple shapes (a cylinder, a ring, 60 instanced marks, two needle halves), not from a photo. With reduced motion or without WebGL it is a flat drawing whose needle points north after login. Phones do not show the side panel and never download it. |
+| **A different illustration for each empty state** | Three identical "nothing here" boxes make three pages look like one. A paper plane (applications: send something), a stack of documents (resumes), a telescope (insights: nothing to see yet) tell the pages apart and hint at what belongs there. They use only the colours of DESIGN.md: ink lines, paper fill, tide for the one important part, sand for warmth. |
+
+### Dashboard
+
+| Change | The UX reason |
+|---|---|
+| **Greeting with the time of day and the name** | The first line of the page speaks to the person, not about the data. The name is optional: it can be given at sign-up or added later from the greeting itself. Without a name the greeting is still complete. |
+| **Four stat cards with sparklines** | Applications, sent, interview rate, average match. The number answers "where am I", the small line answers "which way is it going" (the last twelve weeks). The sparkline is described in words for screen readers. |
+| **Interview rate is "interviews out of sent"** | The card says the fraction too ("2 of 6 sent led to an interview"), because a percentage of a small number is easy to misread. |
+| **Next actions** | A job search stalls because nobody tells you what to do today. The panel lists, in order of urgency: an interview in the next three days, applications sent more than seven days ago without a reply, and applications that were never analyzed. Each line is a link to the application. |
+| **Activity heatmap** | Twelve weeks of "did I add something that day". It shows rhythm and gaps at a glance, which a number cannot. Days are the user's own days (the browser's time zone is sent along). |
+| **No overview for a new account** | Four cards with zeros and an empty calendar would be noise. A new user sees the checklist of first steps instead. |
+
+### Insights
+
+| Change | The UX reason |
+|---|---|
+| **Funnel with conversion rates** | "Applications by status" shows where things are now. The funnel shows how far things got: saved, sent, interview, offer, with the share that made each step. An application counts for a stage if it ever reached it, also if it was rejected later; otherwise every rejection would erase its own history. |
+| **Score over time** | Are the applications getting better matched? One point per week with an analysis. Weeks without an analysis are left out instead of being drawn as zero, and the points are joined by straight lines, because a curve would suggest values that were never measured. |
+| **Skills radar by category** | Ten missing skills are a list; "strong in languages, weak in cloud" is a direction. Each corner is the share of asked-for skills in that category that the resume showed. The same numbers are listed below the chart, because a radar alone is hard to read exactly. The categories come from a fixed list of well-known skills; anything else is "Other". |
+| **Best resume card** | People with two versions of a resume want to know which one to send. The card shows the average match per resume and says so plainly when the comparison rests on few analyses. |
+| **Animated on appear** | Each chart grows in once when it scrolls into view, so the eye lands on it. With reduced motion only a fade remains. |
+
+### Resumes
+
+| Change | The UX reason |
+|---|---|
+| **PDF preview thumbnails** | Two files called `resume-final.pdf` and `resume-final-2.pdf` cannot be told apart by name. The first page as a small picture can. pdf.js is loaded only on this page, and only when a thumbnail is drawn. |
+| **Detected skills as tags** | Shows what the app found in the text, so a user notices at once if an important skill is missing or worded unusually. The skills are found by looking for well-known names, and the page says that a skill written in other words is not found. |
+| **Compare two resumes** | Tick two and see them side by side: first pages, average match, and the skills only one of them has. This answers "what is the difference between my two versions" without opening two PDFs. |
+
+### Application page and board
+
+| Change | The UX reason |
+|---|---|
+| **Status timeline** | "When did I send this?" is the most common question about an old application. Every status change is recorded with its date and shown in order. |
+| **Notes** | What was said on the phone, who to ask for, what to prepare. It belongs next to the application, not in a separate file. |
+| **Interview date** | It feeds "Next actions" on the dashboard, so an interview cannot be forgotten. |
+| **Cover letter tone: formal, friendly, short** | One letter does not fit a bank and a start-up. The honesty rule of the prompt is the same for all three tones: nothing may be invented. |
+| **Regenerate** | The button writes a new letter in the chosen tone. The wording differs each time (the model runs slightly less strictly for letters than for the analysis, which stays repeatable). |
+| **Export as PDF** | Most application forms ask for a file. The PDF is made on the server with the library that already reads the resumes, so the browser downloads no extra code for it. |
+| **Count per column on the board** | Was already there; kept. |
+| **"Days in this stage" badge** | A card that has been in "Applied" for twelve days needs attention; one that arrived yesterday does not. After seven days the badge turns sand-coloured. |
+
+### Backend decisions behind it
+
+- **Status history is its own table** and is written in the same step as the status change. Applications from before the table get two lines: created, and their current status. Steps in between were never recorded, so they are not invented.
+- **"Days in this stage"** is a date on the application itself, so the board needs no extra query per card.
+- **The uploaded PDF is now kept** (in its own table, so listing resumes never loads the files). Resumes uploaded before this step have no preview and show a document icon.
+- **The demo account** has sample data for every new feature, dated relative to the night of the reset: an interview in two days, two applications waiting for a reply, activity over eight weeks, two resumes with different scores.
+
+### Accessibility and speed
+
+- Every chart has its numbers as text or as a hidden table. The heatmap has a sentence and a list for screen readers; colour is never the only signal (the stage badge has text, the tone switch is a radio group).
+- The compare checkboxes, the tone switch, the notes form and the name form work with the keyboard and have visible focus.
+- pdf.js (431 kB, plus a 1.26 MB worker file that reads the PDF off the main thread) and the compass (3.6 kB on top of the shared 3D code) are separate downloads that start only where they are used: pdf.js on the resumes page, the compass on wide login screens. The dashboard still downloads no 3D code.
+- The main bundle grew from 1,129 kB to 1,213 kB (349 kB to 370 kB compressed): the new pages and two more chart types.
+
+## 11. What I have not done
 
 - No test with real users or with a screen reader user. My checks were computed contrast, keyboard walkthroughs, and automated browser runs at desktop and phone width.
 - The automatic detector of the impeccable skill was not run, as described above.
 - The 44 px rule is applied through one CSS rule for touch and narrow screens. I verified it on the insights page in the browser test, not on every page.
 - Frame rates of the 3D scenes on real phones are still unmeasured.
+- Skill detection in resumes is a search for well-known names. It misses skills written in other words and can be fooled by words that are also names ("Spring").
+- The funnel and the interview rate rest on the status history, which only exists from this step on. Older applications have only "created" and their current status.
 - The demo account is shared: two visitors at the same time see each other's changes until the nightly reset.
 - The password strength meter is a simple estimate, not a dictionary check.
 - The scroll story was measured on my laptop only. I have not measured it on a real phone or on an older computer.

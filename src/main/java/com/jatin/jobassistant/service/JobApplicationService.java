@@ -1,5 +1,12 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.repository.StatusHistoryRepository;
+import com.jatin.jobassistant.entity.StatusHistory;
+import com.jatin.jobassistant.entity.CoverLetterTone;
+import com.jatin.jobassistant.dto.UpdateDetailsRequest;
+import java.util.Locale;
+import java.util.List;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +52,12 @@ public class JobApplicationService {
 
 	private final MatchAnalysisRepository matchAnalysisRepository;
 
+	private final StatusHistoryRepository statusHistoryRepository;
+
+	private final PdfTextWriter pdfTextWriter;
+
+	private final Clock clock;
+
 	public ApplicationResponse create(Long userId, CreateApplicationRequest request) {
 		JobApplication application = new JobApplication();
 		application.setUserId(userId);
@@ -52,7 +65,13 @@ public class JobApplicationService {
 		application.setJobTitle(request.jobTitle().strip());
 		application.setJobDescription(request.jobDescription().strip());
 		application.setStatus(ApplicationStatus.SAVED);
-		return ApplicationResponse.from(jobApplicationRepository.save(application), null);
+		Instant now = clock.instant();
+		application.setStatusChangedAt(now);
+		JobApplication saved = jobApplicationRepository.save(application);
+		// The first line of the status timeline: the application was created
+		StatusHistory created = new StatusHistory(saved.getId(), null, ApplicationStatus.SAVED, now);
+		statusHistoryRepository.save(created);
+		return ApplicationResponse.from(saved, null, List.of(created));
 	}
 
 	public PageResponse<ApplicationResponse> list(Long userId, ApplicationStatus status, int page, int size) {
@@ -75,7 +94,24 @@ public class JobApplicationService {
 
 	public ApplicationResponse updateStatus(Long userId, Long id, ApplicationStatus status) {
 		JobApplication application = find(userId, id);
-		application.setStatus(status);
+		ApplicationStatus before = application.getStatus();
+		// Setting the same status again is not a change: nothing is recorded and "days in this stage" keeps counting
+		if (before != status) {
+			Instant now = clock.instant();
+			application.setStatus(status);
+			application.setStatusChangedAt(now);
+			jobApplicationRepository.save(application);
+			statusHistoryRepository.save(new StatusHistory(id, before, status, now));
+		}
+		return withAnalysis(application);
+	}
+
+	// Stores the user's notes and the interview date. Empty notes and a missing date remove what was stored.
+	public ApplicationResponse updateDetails(Long userId, Long id, UpdateDetailsRequest request) {
+		JobApplication application = find(userId, id);
+		String notes = request.notes() == null ? null : request.notes().strip();
+		application.setNotes(notes == null || notes.isEmpty() ? null : notes);
+		application.setInterviewAt(request.interviewAt());
 		return withAnalysis(jobApplicationRepository.save(application));
 	}
 
@@ -119,18 +155,44 @@ public class JobApplicationService {
 
 	private ApplicationResponse withAnalysis(JobApplication application) {
 		return ApplicationResponse.from(application,
-				matchAnalysisRepository.findByApplicationId(application.getId()).orElse(null));
+				matchAnalysisRepository.findByApplicationId(application.getId()).orElse(null),
+				statusHistoryRepository.findByApplicationIdOrderByChangedAtAscIdAsc(application.getId()));
 	}
 
 	public CoverLetterResponse generateCoverLetter(Long userId, Long id, Long resumeId) {
+		return generateCoverLetter(userId, id, resumeId, CoverLetterTone.FORMAL);
+	}
+
+	// Writes a new cover letter in the asked tone and replaces the stored one. Calling it again is "regenerate".
+	public CoverLetterResponse generateCoverLetter(Long userId, Long id, Long resumeId, CoverLetterTone tone) {
 		JobApplication application = find(userId, id);
 		Resume resume = findResumeFor(userId, application, resumeId);
-
 		String coverLetter = aiService.generateCoverLetter(resume.getExtractedText(), application.getJobTitle(),
-				application.getCompanyName(), application.getJobDescription());
+				application.getCompanyName(), application.getJobDescription(), tone);
 		application.setCoverLetter(coverLetter);
+		application.setCoverLetterTone(tone);
 		jobApplicationRepository.save(application);
-		return new CoverLetterResponse(application.getId(), coverLetter);
+		return new CoverLetterResponse(application.getId(), coverLetter, tone);
+	}
+
+	// The stored cover letter as a PDF file
+	public CoverLetterPdf coverLetterPdf(Long userId, Long id) {
+		JobApplication application = find(userId, id);
+		if (isBlank(application.getCoverLetter())) {
+			throw new InvalidAnalysisRequestException("This application has no cover letter yet. Generate one first");
+		}
+		String title = "Cover letter - " + application.getJobTitle() + " at " + application.getCompanyName();
+		return new CoverLetterPdf(fileName(application), pdfTextWriter.write(title, application.getCoverLetter()));
+	}
+
+	public record CoverLetterPdf(String fileName, byte[] content) {
+	}
+
+	// e.g. "cover-letter-nordlicht-software.pdf": only letters, digits and dashes, so it is safe in a header
+	private String fileName(JobApplication application) {
+		String company = application.getCompanyName().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-")
+			.replaceAll("^-|-$", "");
+		return "cover-letter" + (company.isEmpty() ? "" : "-" + company) + ".pdf";
 	}
 
 	public void delete(Long userId, Long id) {

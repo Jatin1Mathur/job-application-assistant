@@ -5,7 +5,7 @@ import type { FormEvent, KeyboardEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ApiError, errorMessage } from '../api.ts'
 import { useAuth } from '../auth.tsx'
-import { BagDrawing } from '../components/BackpackFallback.tsx'
+import CompassFallback from '../components/CompassFallback.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import Lazy3D from '../components/Lazy3D.tsx'
 import Logo from '../components/Logo.tsx'
@@ -19,7 +19,7 @@ import { emailProblem, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordStrengt
 import { usePageTitle } from '../lib/usePageTitle.ts'
 
 // The 3D code is a separate download. It starts only on wide screens, where the side panel is shown.
-const BackpackMini = lazy(() => import('../three/BackpackMini.tsx'))
+const CompassScene = lazy(() => import('../three/CompassScene.tsx'))
 
 // Plain advice, no numbers: nothing here is a statistic
 const TIPS = [
@@ -30,8 +30,9 @@ const TIPS = [
   'Keep a record of every application: the date, the status, and which resume you sent.',
 ]
 
-// The left half of the login and register pages: a small backpack and job-hunt tips that take turns
-function SidePanel() {
+// The left half of the login and register pages: a compass and job-hunt tips that take turns.
+// north: true once the login has succeeded. The needle of the compass then swings to north.
+function SidePanel({ north }: { north: boolean }) {
   const reducedMotion = useReducedMotion()
   const [tip, setTip] = useState(0)
   const [paused, setPaused] = useState(false)
@@ -53,14 +54,10 @@ function SidePanel() {
 
       <div className="relative">
         <Lazy3D
-          label="A leather backpack, turning slowly"
+          label={north ? 'A compass. Its needle points north.' : 'A compass. Its needle is still searching for north.'}
           className="mx-auto h-64 w-64"
-          fallback={
-            <svg viewBox="150 120 200 200" className="size-full" aria-hidden>
-              <BagDrawing cx={250} cy={215} />
-            </svg>
-          }
-          scene={(props) => <BackpackMini {...props} />}
+          fallback={<CompassFallback north={north} />}
+          scene={(props) => <CompassScene {...props} north={north} />}
         />
         <h2 className="mt-6 max-w-md font-display text-4xl font-semibold leading-[1.08] text-white">Know where you stand before you apply.</h2>
       </div>
@@ -154,6 +151,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const passwordInput = useRef<HTMLInputElement>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // Optional, only asked for when creating an account. It is used for the greeting on the dashboard.
+  const [name, setName] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [capsLock, setCapsLock] = useState(false)
   // A field shows its problem only after the visitor has left it once, or after a try to submit
@@ -181,7 +180,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   // After the check mark has been seen, go on to the dashboard
   useEffect(() => {
     if (phase !== 'success') return
-    const timer = setTimeout(() => navigate(cameFrom, { replace: true }), reducedMotion ? 500 : 1000)
+    const timer = setTimeout(() => navigate(cameFrom, { replace: true }), reducedMotion ? 500 : 1300)
     return () => clearTimeout(timer)
   }, [phase, reducedMotion, navigate, cameFrom])
 
@@ -198,7 +197,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     if (passwordError) return passwordInput.current?.focus()
     setPhase('busy')
     try {
-      await (isLogin ? login(email, password) : register(email, password))
+      await (isLogin ? login(email, password) : register(email, password, name))
       setSuccessText(isLogin ? 'You are logged in' : 'Your account is ready')
       setPhase('success')
     } catch (err) {
@@ -226,7 +225,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
   return (
     <div className="flex min-h-dvh">
-      <SidePanel />
+      <SidePanel north={phase === 'success'} />
       <main id="main" className="relative flex w-full flex-col items-center justify-center px-5 py-16 lg:w-1/2">
         <div className="absolute inset-x-4 top-4 flex items-center justify-between">
           <Link to="/" className="inline-flex min-h-11 items-center gap-1.5 rounded text-sm font-medium text-muted-foreground hover:text-foreground">
@@ -283,6 +282,30 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                 <ErrorAlert message={error} />
               </div>
             )}
+
+            {/* The name field grows in when the form turns into "Create account" */}
+            <AnimatePresence initial={false}>
+              {!isLogin && (
+                <motion.div
+                  key="name"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="pb-4">
+                    <Label htmlFor="name">
+                      First name <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input id="name" name="name" autoComplete="given-name" maxLength={100} className="mt-1.5 h-11" value={name} onChange={(event) => setName(event.target.value)} aria-describedby="name-hint" />
+                    <p id="name-hint" className="mt-1.5 text-xs text-muted-foreground">
+                      Used to greet you on the dashboard.
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div>
               <Label htmlFor="email">Email</Label>
