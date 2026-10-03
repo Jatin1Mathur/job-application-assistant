@@ -23,5 +23,14 @@ spring:
       host: localhost
       port: 6379
 
+  # Resume uploads: PDFs up to 5 MB (the request itself may be slightly bigger than the file)
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
 server:
   port: 8080
+  tomcat:
+    # Let Tomcat read an oversized upload to the end so the client gets our JSON error, not a dropped connection
+    max-swallow-size: -1
