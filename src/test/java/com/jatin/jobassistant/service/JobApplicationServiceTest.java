@@ -28,6 +28,7 @@ import com.jatin.jobassistant.dto.ApplicationResponse;
 import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
+import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.entity.JobApplication;
@@ -38,6 +39,8 @@ import com.jatin.jobassistant.repository.ResumeRepository;
 @ExtendWith(MockitoExtension.class)
 class JobApplicationServiceTest {
 
+	private static final String JOB_DESCRIPTION = "We need a Java Backend Developer with Spring Boot, REST APIs, PostgreSQL, Docker and unit testing experience.";
+
 	@Mock
 	private JobApplicationRepository jobApplicationRepository;
 
@@ -46,6 +49,9 @@ class JobApplicationServiceTest {
 
 	@Mock
 	private AiService aiService;
+
+	@Mock
+	private MatchAnalysisCache matchAnalysisCache;
 
 	@InjectMocks
 	private JobApplicationService jobApplicationService;
@@ -61,12 +67,12 @@ class JobApplicationServiceTest {
 		});
 
 		ApplicationResponse response = jobApplicationService
-			.create(new CreateApplicationRequest(" Acme ", "Java Developer", "Build APIs"));
+			.create(new CreateApplicationRequest(" Acme ", "Java Developer", JOB_DESCRIPTION));
 
 		assertThat(response.id()).isEqualTo(1L);
 		assertThat(response.companyName()).isEqualTo("Acme");
 		assertThat(response.jobTitle()).isEqualTo("Java Developer");
-		assertThat(response.jobDescription()).isEqualTo("Build APIs");
+		assertThat(response.jobDescription()).isEqualTo(JOB_DESCRIPTION);
 		assertThat(response.status()).isEqualTo(ApplicationStatus.SAVED);
 	}
 
@@ -160,18 +166,66 @@ class JobApplicationServiceTest {
 	@Test
 	void analyzeSendsTextsToTheAiAndSavesTheScore() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
-		application.setJobDescription("Java and Spring Boot");
+		application.setJobDescription(JOB_DESCRIPTION);
 		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
 		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		MatchAnalysisResponse analysis = new MatchAnalysisResponse(80, List.of("Java"), List.of("Spring Boot"),
 				List.of("tip 1", "tip 2", "tip 3"));
-		when(aiService.analyzeMatch("I know Java", "Java and Spring Boot")).thenReturn(analysis);
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
+		when(aiService.analyzeMatch("I know Java", JOB_DESCRIPTION)).thenReturn(analysis);
 
-		MatchAnalysisResponse response = jobApplicationService.analyze(7L, 2L);
+		MatchAnalysisResult result = jobApplicationService.analyze(7L, 2L);
 
-		assertThat(response).isEqualTo(analysis);
+		assertThat(result.analysis()).isEqualTo(analysis);
+		assertThat(result.fromCache()).isFalse();
 		assertThat(application.getMatchScore()).isEqualTo(80);
 		verify(jobApplicationRepository).save(application);
+		verify(matchAnalysisCache).put(2L, 7L, JOB_DESCRIPTION, analysis);
+	}
+
+	@Test
+	void analyzeReturnsTheCachedResultWithoutCallingTheAi() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		MatchAnalysisResponse cached = new MatchAnalysisResponse(80, List.of("Java"), List.of("Spring Boot"),
+				List.of("tip 1", "tip 2", "tip 3"));
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.of(cached));
+
+		MatchAnalysisResult result = jobApplicationService.analyze(7L, 2L);
+
+		assertThat(result.analysis()).isEqualTo(cached);
+		assertThat(result.fromCache()).isTrue();
+		assertThat(application.getMatchScore()).isEqualTo(80);
+		verifyNoInteractions(aiService);
+		verify(matchAnalysisCache, never()).put(any(), any(), any(), any());
+	}
+
+	@Test
+	void analyzeRejectsJobDescriptionShorterThan100Characters() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription("Java and Spring Boot");
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L))
+			.isInstanceOf(InvalidAnalysisRequestException.class)
+			.hasMessageContaining("at least 100 characters");
+		verifyNoInteractions(aiService, matchAnalysisCache);
+	}
+
+	@Test
+	void generateCoverLetterRejectsJobDescriptionShorterThan100Characters() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription("x".repeat(99));
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 2L))
+			.isInstanceOf(InvalidAnalysisRequestException.class)
+			.hasMessageContaining("at least 100 characters");
+		verifyNoInteractions(aiService);
 	}
 
 	@Test
@@ -206,23 +260,26 @@ class JobApplicationServiceTest {
 	@Test
 	void analyzeDoesNotSaveAScoreWhenTheAiFails() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
-		application.setJobDescription("Java and Spring Boot");
+		application.setJobDescription(JOB_DESCRIPTION);
 		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
 		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
 		when(aiService.analyzeMatch(any(), any())).thenThrow(new AiUnavailableException("down", null));
 
 		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L)).isInstanceOf(AiUnavailableException.class);
 		assertThat(application.getMatchScore()).isNull();
 		verify(jobApplicationRepository, never()).save(any());
+		// Errors must not be cached, or every later call would get the same error for 24 hours
+		verify(matchAnalysisCache, never()).put(any(), any(), any(), any());
 	}
 
 	@Test
 	void generateCoverLetterSendsDetailsToTheAiAndSavesTheLetter() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
-		application.setJobDescription("Java and Spring Boot");
+		application.setJobDescription(JOB_DESCRIPTION);
 		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
 		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
-		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", "Java and Spring Boot"))
+		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", JOB_DESCRIPTION))
 			.thenReturn("Dear Hiring Manager, ...");
 
 		CoverLetterResponse response = jobApplicationService.generateCoverLetter(7L, 2L);
@@ -256,7 +313,7 @@ class JobApplicationServiceTest {
 	@Test
 	void generateCoverLetterDoesNotSaveWhenTheAiFails() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
-		application.setJobDescription("Java and Spring Boot");
+		application.setJobDescription(JOB_DESCRIPTION);
 		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
 		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		when(aiService.generateCoverLetter(any(), any(), any(), any())).thenThrow(new AiTimeoutException("slow", null));

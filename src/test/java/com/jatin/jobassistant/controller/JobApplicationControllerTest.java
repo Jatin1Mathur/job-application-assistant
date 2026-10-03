@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.jatin.jobassistant.dto.ApplicationResponse;
 import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
+import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.service.AiTimeoutException;
@@ -36,6 +38,8 @@ import com.jatin.jobassistant.service.JobApplicationService;
 // Starts only the web layer (controller + GlobalExceptionHandler); the service is a mock, so no database is needed
 @WebMvcTest(JobApplicationController.class)
 class JobApplicationControllerTest {
+
+	private static final String JOB_DESCRIPTION = "We need a Java Backend Developer with Spring Boot, REST APIs, PostgreSQL, Docker and unit testing experience.";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -50,8 +54,8 @@ class JobApplicationControllerTest {
 		mockMvc
 			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"companyName": "Acme", "jobTitle": "Java Developer", "jobDescription": "Build APIs"}
-						"""))
+						{"companyName": "Acme", "jobTitle": "Java Developer", "jobDescription": "%s"}
+						""".formatted(JOB_DESCRIPTION)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.id").value(1))
 			.andExpect(jsonPath("$.companyName").value("Acme"))
@@ -63,7 +67,7 @@ class JobApplicationControllerTest {
 		mockMvc
 			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"companyName": " ", "jobDescription": "Build APIs"}
+						{"companyName": " "}
 						"""))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
@@ -198,15 +202,50 @@ class JobApplicationControllerTest {
 
 	@Test
 	void analyzeReturnsTheAnalysis() throws Exception {
-		when(jobApplicationService.analyze(1L, 2L)).thenReturn(new MatchAnalysisResponse(80, List.of("Java"),
-				List.of("Kubernetes"), List.of("tip 1", "tip 2", "tip 3")));
+		when(jobApplicationService.analyze(1L, 2L)).thenReturn(new MatchAnalysisResult(ANALYSIS, false));
 
 		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
 			.andExpect(status().isOk())
+			.andExpect(header().string("X-Cache", "MISS"))
 			.andExpect(jsonPath("$.matchScore").value(80))
 			.andExpect(jsonPath("$.matchingSkills[0]").value("Java"))
 			.andExpect(jsonPath("$.missingSkills[0]").value("Kubernetes"))
 			.andExpect(jsonPath("$.resumeTips.length()").value(3));
+	}
+
+	@Test
+	void analyzeSetsCacheHitHeaderWhenTheResultCameFromTheCache() throws Exception {
+		when(jobApplicationService.analyze(1L, 2L)).thenReturn(new MatchAnalysisResult(ANALYSIS, true));
+
+		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
+			.andExpect(status().isOk())
+			.andExpect(header().string("X-Cache", "HIT"))
+			.andExpect(jsonPath("$.matchScore").value(80));
+	}
+
+	@Test
+	void createReturns400WhenJobDescriptionIsShorterThan100Characters() throws Exception {
+		mockMvc
+			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"companyName": "Acme", "jobTitle": "Java Developer", "jobDescription": "Build APIs"}
+						"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("jobDescription must be at least 100 characters"));
+
+		verifyNoInteractions(jobApplicationService);
+	}
+
+	@Test
+	void createAllowsLeavingOutTheJobDescription() throws Exception {
+		when(jobApplicationService.create(any())).thenReturn(response(1L, ApplicationStatus.SAVED));
+
+		mockMvc
+			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"companyName": "Acme", "jobTitle": "Java Developer"}
+						"""))
+			.andExpect(status().isCreated());
 	}
 
 	@Test
@@ -277,6 +316,9 @@ class JobApplicationControllerTest {
 		mockMvc.perform(post("/api/applications/1/cover-letter").param("resumeId", "2"))
 			.andExpect(status().isBadGateway());
 	}
+
+	private static final MatchAnalysisResponse ANALYSIS = new MatchAnalysisResponse(80, List.of("Java"),
+			List.of("Kubernetes"), List.of("tip 1", "tip 2", "tip 3"));
 
 	private ApplicationResponse response(Long id, ApplicationStatus status) {
 		return new ApplicationResponse(id, "Acme", "Java Developer", "Build APIs", status, null, null, Instant.now(),

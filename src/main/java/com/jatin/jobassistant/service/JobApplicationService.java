@@ -1,5 +1,7 @@
 package com.jatin.jobassistant.service;
 
+import java.util.Optional;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +12,7 @@ import com.jatin.jobassistant.dto.ApplicationResponse;
 import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
+import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.entity.JobApplication;
@@ -31,6 +34,8 @@ public class JobApplicationService {
 	private final ResumeRepository resumeRepository;
 
 	private final AiService aiService;
+
+	private final MatchAnalysisCache matchAnalysisCache;
 
 	public ApplicationResponse create(CreateApplicationRequest request) {
 		JobApplication application = new JobApplication();
@@ -58,15 +63,22 @@ public class JobApplicationService {
 		return ApplicationResponse.from(jobApplicationRepository.save(application));
 	}
 
-	public MatchAnalysisResponse analyze(Long id, Long resumeId) {
+	public MatchAnalysisResult analyze(Long id, Long resumeId) {
 		JobApplication application = find(id);
 		Resume resume = findResumeFor(application, resumeId);
+		String jobDescription = application.getJobDescription();
 
-		MatchAnalysisResponse analysis = aiService.analyzeMatch(resume.getExtractedText(),
-				application.getJobDescription());
+		Optional<MatchAnalysisResponse> cached = matchAnalysisCache.get(resumeId, id, jobDescription);
+		// Only reached when the AI answered properly, so errors are never cached
+		MatchAnalysisResponse analysis = cached.orElseGet(() -> {
+			MatchAnalysisResponse fresh = aiService.analyzeMatch(resume.getExtractedText(), jobDescription);
+			matchAnalysisCache.put(resumeId, id, jobDescription, fresh);
+			return fresh;
+		});
+
 		application.setMatchScore(analysis.matchScore());
 		jobApplicationRepository.save(application);
-		return analysis;
+		return new MatchAnalysisResult(analysis, cached.isPresent());
 	}
 
 	public CoverLetterResponse generateCoverLetter(Long id, Long resumeId) {
@@ -87,8 +99,14 @@ public class JobApplicationService {
 	// Loads the resume and makes sure both texts the AI needs are there
 	private Resume findResumeFor(JobApplication application, Long resumeId) {
 		Resume resume = resumeRepository.findById(resumeId).orElseThrow(() -> new ResumeNotFoundException(resumeId));
-		if (isBlank(application.getJobDescription())) {
+		String jobDescription = application.getJobDescription();
+		if (isBlank(jobDescription)) {
 			throw new InvalidAnalysisRequestException("This application has no job description for the AI to use");
+		}
+		if (jobDescription.strip().length() < CreateApplicationRequest.MIN_JOB_DESCRIPTION_LENGTH) {
+			throw new InvalidAnalysisRequestException("The job description is too short ("
+					+ jobDescription.strip().length() + " characters). The AI needs at least "
+					+ CreateApplicationRequest.MIN_JOB_DESCRIPTION_LENGTH + " characters");
 		}
 		if (isBlank(resume.getExtractedText())) {
 			throw new InvalidAnalysisRequestException("This resume has no text for the AI to use");
