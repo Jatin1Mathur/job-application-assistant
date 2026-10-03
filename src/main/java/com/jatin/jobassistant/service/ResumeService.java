@@ -2,6 +2,7 @@ package com.jatin.jobassistant.service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -45,6 +46,13 @@ public class ResumeService {
 		resume.setFileName(file.getOriginalFilename());
 		resume.setExtractedText(extractText(bytes));
 		return ResumeUploadResponse.from(resumeRepository.save(resume));
+	}
+
+	public List<ResumeUploadResponse> list(Long userId) {
+		return resumeRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId)
+			.stream()
+			.map(ResumeUploadResponse::from)
+			.toList();
 	}
 
 	public ResumeResponse getById(Long userId, Long id) {
