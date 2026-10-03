@@ -28,14 +28,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Skeleton } from '../components/ui/skeleton.tsx'
 import { Tabs, TabsContent } from '../components/ui/tabs.tsx'
 import { celebrateOffer } from '../lib/celebrate.ts'
-import { formatDate, scoreTone } from '../lib/format.ts'
+import { formatDate, formatRelativeDate, scoreTone } from '../lib/format.ts'
 import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 
 const ANALYZE_STEPS = ['Reading your resume…', 'Comparing skills…', 'Writing tips…']
 const LETTER_STEPS = ['Reading your resume…', 'Studying the job posting…', 'Writing your cover letter…']
 
-const section = 'rounded-2xl border bg-card p-6 shadow-card'
+const section = 'rounded-xl border bg-card p-6'
 
 // Skill tags that pop in one after another: green for matching skills, red for missing ones
 function SkillTags({ title, skills, kind }: { title: string; skills: string[]; kind: 'matching' | 'missing' }) {
@@ -75,10 +76,10 @@ function DetailSkeleton() {
       <Skeleton className="mt-2 h-4 w-56" />
       <div className="mt-6 grid gap-6 lg:grid-cols-5">
         <div className="min-w-0 space-y-6 lg:col-span-3">
-          <Skeleton className="h-28 rounded-2xl" />
-          <Skeleton className="h-64 rounded-2xl" />
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
         </div>
-        <Skeleton className="h-72 rounded-2xl lg:col-span-2" />
+        <Skeleton className="h-72 rounded-xl lg:col-span-2" />
       </div>
     </div>
   )
@@ -94,6 +95,7 @@ export default function ApplicationDetailPage() {
   // True once the application and the resumes have come back from the backend
   const [loaded, setLoaded] = useState(false)
   const [tab, setTab] = useState('overview')
+  const [descriptionOpen, setDescriptionOpen] = useState(false)
   const [resumes, setResumes] = useState<ResumeSummary[]>([])
   const [resumeId, setResumeId] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -112,6 +114,8 @@ export default function ApplicationDetailPage() {
   const [writing, setWriting] = useState(false)
   const [letterError, setLetterError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  usePageTitle(application ? `${application.jobTitle} at ${application.companyName}` : 'Application')
 
   const [statusSaving, setStatusSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -146,7 +150,7 @@ export default function ApplicationDetailPage() {
       })
     } catch (err) {
       setAnalyzeError(errorMessage(err))
-      toast.error('Analysis failed', { description: errorMessage(err) })
+      toast.error('The analysis did not finish', { description: errorMessage(err) })
     } finally {
       setAnalyzing(false)
     }
@@ -159,7 +163,7 @@ export default function ApplicationDetailPage() {
     try {
       const result = await api.generateCoverLetter(id, resumeId)
       setApplication((current) => current && { ...current, coverLetter: result.coverLetter })
-      toast.success('Cover letter ready')
+      toast.success('Cover letter drafted')
     } catch (err) {
       setLetterError(errorMessage(err))
       toast.error('Could not write the cover letter', { description: errorMessage(err) })
@@ -173,7 +177,7 @@ export default function ApplicationDetailPage() {
     try {
       await navigator.clipboard.writeText(application.coverLetter)
       setCopied(true)
-      toast.success('Cover letter copied to the clipboard')
+      toast.success('Copied to the clipboard')
       setTimeout(() => setCopied(false), 2000)
     } catch {
       toast.error('Could not copy', { description: 'Select the text and copy it by hand.' })
@@ -251,16 +255,13 @@ export default function ApplicationDetailPage() {
       <motion.div
         layoutId={`application-${application.id}`}
         transition={{ type: 'spring', duration: 0.38, bounce: 0.12 }}
-        className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-5 shadow-card sm:p-6"
+        className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5 sm:p-6"
       >
         <div className="flex min-w-0 items-center gap-4">
-          <span className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-accent font-display text-lg font-semibold text-accent-foreground sm:flex">
-            {application.companyName.charAt(0).toUpperCase()}
-          </span>
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight">{application.jobTitle}</h1>
+            <h1 className="text-2xl font-semibold sm:text-3xl">{application.jobTitle}</h1>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {application.companyName} · added {formatDate(application.createdAt)}
+              {application.companyName} · added {formatRelativeDate(application.createdAt)}
             </p>
           </div>
         </div>
@@ -270,7 +271,7 @@ export default function ApplicationDetailPage() {
             disabled={statusSaving}
             onValueChange={(value) => changeStatus(value as ApplicationStatus)}
           >
-            <SelectTrigger aria-label="Change status" className="data-[size=default]:h-9 min-w-36 bg-card">
+            <SelectTrigger aria-label="Change status" className="data-[size=default]:h-10 min-w-40 bg-card">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -282,44 +283,16 @@ export default function ApplicationDetailPage() {
               ))}
             </SelectContent>
           </Select>
-
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="icon-lg" aria-label="Delete application">
-                <Trash2 />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete this application?</DialogTitle>
-                <DialogDescription>
-                  "{application.jobTitle}" at {application.companyName} will be removed, together with its match score
-                  and cover letter. This cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline" size="lg">
-                    Cancel
-                  </Button>
-                </DialogClose>
-                <Button variant="destructive" size="lg" disabled={deleting} onClick={deleteApplication}>
-                  {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-                  Delete
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </motion.div>
 
       {!loaded ? (
         <div className="mt-6 grid gap-6 lg:grid-cols-5" aria-busy="true" aria-label="Loading application">
           <div className="space-y-6 lg:col-span-3">
-            <Skeleton className="h-28 rounded-2xl" />
-            <Skeleton className="h-64 rounded-2xl" />
+            <Skeleton className="h-28 rounded-xl" />
+            <Skeleton className="h-64 rounded-xl" />
           </div>
-          <Skeleton className="h-72 rounded-2xl lg:col-span-2" />
+          <Skeleton className="h-72 rounded-xl lg:col-span-2" />
         </div>
       ) : (
       <Tabs
@@ -343,51 +316,17 @@ export default function ApplicationDetailPage() {
         <TabsContent value="overview" className="animate-in fade-in-0 duration-200">
       <motion.div variants={staggerList} initial="hidden" animate="show" className="mt-4 grid gap-6 lg:grid-cols-5">
         <div className="min-w-0 space-y-6 lg:col-span-3">
-          {/* Which resume the AI should use */}
-          <motion.section variants={staggerItem} className={section}>
-            <h2 className="flex items-center gap-2 text-base font-semibold">
-              <FileText className="size-4 text-muted-foreground" /> Resume
-            </h2>
-            {noResume ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent/60 px-4 py-3 text-sm">
-                <span>Upload a resume first, then come back to analyze the match.</span>
-                <Button asChild size="lg">
-                  <Link to="/resumes">Upload resume</Link>
-                </Button>
-              </div>
-            ) : (
-              <Select
-                value={resumeId === null ? undefined : String(resumeId)}
-                disabled={busy}
-                onValueChange={(value) => setResumeId(Number(value))}
-              >
-                <SelectTrigger
-                  aria-label="Resume"
-                  className="mt-3 w-full min-w-0 data-[size=default]:h-10 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
-                >
-                  <SelectValue placeholder="Choose a resume" />
-                </SelectTrigger>
-                <SelectContent>
-                  {resumes.map((resume) => (
-                    <SelectItem key={resume.id} value={String(resume.id)}>
-                      {resume.fileName} · {formatDate(resume.createdAt)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </motion.section>
-
           {/* AI match analysis */}
           <motion.section variants={staggerItem} className={section}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="flex items-center gap-2 text-base font-semibold">
-                  <Sparkles className="size-4 text-primary" /> AI match analysis
+                  <Sparkles className="size-4 text-primary" /> Match analysis
                 </h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">How well does your resume fit this job?</p>
               </div>
-              <MotionButton size="lg" disabled={noResume || busy} onClick={analyze}>
+              {/* One filled button at a time: the filled one is the next step, the other is outlined */}
+              <MotionButton size="lg" variant={score === null ? 'default' : 'outline'} disabled={noResume || busy} onClick={analyze}>
                 {analyzing ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 {analyzing ? 'Analyzing…' : score !== null ? 'Analyze again' : 'Analyze match'}
               </MotionButton>
@@ -459,15 +398,15 @@ export default function ApplicationDetailPage() {
                   </div>
                 ) : (
                   <p className="mt-4 text-sm text-muted-foreground">
-                    This is the saved score. Click "Analyze again" to see the skills and tips.
+                    This is the saved score. Analyze again to see the skills and tips.
                   </p>
                 )}
               </motion.div>
             )}
 
             {!analyzing && score === null && !analyzeError && (
-              <p className="mt-5 rounded-xl bg-muted/60 px-4 py-3.5 text-sm text-muted-foreground">
-                Not analyzed yet. Click "Analyze match" to get a score, matching and missing skills, and three tips.
+              <p className="mt-5 rounded-lg bg-muted/60 px-4 py-3.5 text-sm text-muted-foreground">
+                Not analyzed yet. Analyze the match to see your score, the skills you already have, the skills to work on, and three tips for your resume.
               </p>
             )}
           </motion.section>
@@ -480,7 +419,7 @@ export default function ApplicationDetailPage() {
                   <PenLine className="size-4 text-primary" /> Cover letter
                 </h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Written by the AI using only facts from your resume.
+                  Drafted from the facts in your resume. Nothing is invented.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -490,7 +429,12 @@ export default function ApplicationDetailPage() {
                     {copied ? 'Copied' : 'Copy'}
                   </MotionButton>
                 )}
-                <MotionButton size="lg" disabled={noResume || busy} onClick={writeCoverLetter}>
+                <MotionButton
+                  size="lg"
+                  variant={score !== null && !application.coverLetter ? 'default' : 'outline'}
+                  disabled={noResume || busy}
+                  onClick={writeCoverLetter}
+                >
                   {writing ? <Loader2 className="animate-spin" /> : <PenLine />}
                   {writing ? 'Writing…' : application.coverLetter ? 'Generate again' : 'Generate cover letter'}
                 </MotionButton>
@@ -517,33 +461,80 @@ export default function ApplicationDetailPage() {
               >
                 <div
                   data-testid="cover-letter"
-                  className="mt-5 whitespace-pre-wrap rounded-xl border bg-muted/40 px-5 py-4 text-sm leading-relaxed"
+                  className="mt-5 max-w-[68ch] whitespace-pre-wrap border-y py-5 text-[0.9375rem] leading-relaxed"
                 >
                   {application.coverLetter}
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {application.coverLetter.trim().split(/\s+/).length} words · Always read the letter and check the
-                  facts before you send it.
+                  {application.coverLetter.trim().split(/\s+/).length} words · Read it through and check the facts
+                  before you send it.
                 </p>
               </motion.div>
             )}
 
             {!writing && !application.coverLetter && !letterError && (
-              <p className="mt-5 rounded-xl bg-muted/60 px-4 py-3.5 text-sm text-muted-foreground">
-                No cover letter yet. Click "Generate cover letter" to let the AI write one.
+              <p className="mt-5 rounded-lg bg-muted/60 px-4 py-3.5 text-sm text-muted-foreground">
+                No cover letter yet. Generate one, then edit it until it sounds like you.
               </p>
             )}
           </motion.section>
         </div>
 
-        {/* Job description */}
+        {/* The two things being compared: the resume and the job description */}
         <motion.aside variants={staggerItem} className="min-w-0 lg:col-span-2">
-          <section className={`${section} lg:sticky lg:top-24`}>
-            <h2 className="text-base font-semibold">Job description</h2>
-            <p className="mt-3 max-h-[32rem] overflow-y-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-              {application.jobDescription}
-            </p>
-          </section>
+          <div className={`${section} space-y-6 lg:sticky lg:top-24`}>
+            <section>
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <FileText className="size-4 text-muted-foreground" /> Resume used
+              </h2>
+            {noResume ? (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-encourage px-4 py-3 text-sm text-encourage-foreground">
+                <span>Upload your resume first. Then you can check the match and write a cover letter.</span>
+                <Button asChild size="lg">
+                  <Link to="/resumes">Upload resume</Link>
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={resumeId === null ? undefined : String(resumeId)}
+                disabled={busy}
+                onValueChange={(value) => setResumeId(Number(value))}
+              >
+                <SelectTrigger
+                  aria-label="Resume"
+                  className="mt-3 w-full min-w-0 data-[size=default]:h-10 *:data-[slot=select-value]:block *:data-[slot=select-value]:truncate"
+                >
+                  <SelectValue placeholder="Choose a resume" />
+                </SelectTrigger>
+                <SelectContent>
+                  {resumes.map((resume) => (
+                    <SelectItem key={resume.id} value={String(resume.id)}>
+                      {resume.fileName} · {formatDate(resume.createdAt)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            </section>
+            <section className="border-t pt-5">
+              <h2 className="text-sm font-semibold">Job description</h2>
+              <p
+                className={`mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground ${descriptionOpen ? '' : 'line-clamp-[12]'}`}
+              >
+                {application.jobDescription}
+              </p>
+              {application.jobDescription.length > 600 && (
+                <button
+                  type="button"
+                  onClick={() => setDescriptionOpen(!descriptionOpen)}
+                  aria-expanded={descriptionOpen}
+                  className="mt-2 rounded text-sm font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {descriptionOpen ? 'Show less' : 'Show the full description'}
+                </button>
+              )}
+            </section>
+          </div>
         </motion.aside>
       </motion.div>
         </TabsContent>
@@ -612,6 +603,38 @@ export default function ApplicationDetailPage() {
         </TabsContent>
       </Tabs>
       )}
+
+      {/* Deleting is rare and cannot be undone, so it sits at the end of the page, away from the status control */}
+      <div className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+        <p className="text-sm text-muted-foreground">No longer interested in this job?</p>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="lg" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 /> Delete application
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete this application?</DialogTitle>
+              <DialogDescription>
+                "{application.jobTitle}" at {application.companyName} will be removed, together with its match score
+                and cover letter. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" size="lg">
+                  Keep it
+                </Button>
+              </DialogClose>
+              <Button variant="destructive" size="lg" disabled={deleting} onClick={deleteApplication}>
+                {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </PageTransition>
   )
 }

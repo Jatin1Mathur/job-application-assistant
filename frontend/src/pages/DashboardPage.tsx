@@ -21,7 +21,8 @@ import { Button } from '../components/ui/button.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
 import { Tabs } from '../components/ui/tabs.tsx'
 import { celebrateOffer } from '../lib/celebrate.ts'
-import { formatDate } from '../lib/format.ts'
+import { formatRelativeDate } from '../lib/format.ts'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 import { staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
 
@@ -35,53 +36,45 @@ type View = 'list' | 'board'
 
 function CardSkeleton() {
   return (
-    <div className="rounded-2xl border bg-card p-5">
-      <div className="flex items-start justify-between">
-        <Skeleton className="size-11 rounded-xl" />
+    <div className="rounded-xl border bg-card p-5">
+      <div className="flex h-12 items-center justify-between">
+        <Skeleton className="h-6 w-24 rounded-full" />
         <Skeleton className="size-12 rounded-full" />
       </div>
-      <Skeleton className="mt-4 h-4 w-3/4" />
+      <Skeleton className="mt-3 h-4 w-3/4" />
       <Skeleton className="mt-2 h-3.5 w-1/2" />
-      <Skeleton className="mt-5 h-6 w-24 rounded-full" />
+      <Skeleton className="mt-6 h-3 w-20" />
     </div>
   )
 }
 
 function ApplicationCard({ application }: { application: Application }) {
   return (
-    // variants: the card takes part in the list's stagger. whileHover: it lifts a little under the mouse
-    <motion.li variants={staggerItem} whileHover={{ y: -4 }} transition={{ duration: 0.18 }}>
-      {/* state: hands the application to the detail page, so its header can be drawn immediately */}
+    // variants: the card takes part in the list's stagger
+    <motion.li variants={staggerItem}>
       <TiltCard className="h-full">
-      <Link to={`/applications/${application.id}`} state={{ application }} className="group block h-full rounded-2xl">
-        {/* layoutId: the detail page's header has the same one, so this card grows into it */}
-        <motion.div
-          layoutId={`application-${application.id}`}
-          transition={{ type: 'spring', duration: 0.38, bounce: 0.12 }}
-          className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-card transition-shadow group-hover:shadow-raised"
-        >
-        <div className="flex items-start justify-between gap-3">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-accent font-display text-base font-semibold text-accent-foreground">
-            {application.companyName.charAt(0).toUpperCase()}
-          </span>
-          {application.matchScore === null ? (
-            <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              Not analyzed
-            </span>
-          ) : (
-            <ScoreRing score={application.matchScore} size="sm" />
-          )}
-        </div>
-        <h2 className="mt-4 line-clamp-2 text-base font-semibold leading-snug group-hover:text-primary">
-          {application.jobTitle}
-        </h2>
-        <p className="mt-0.5 truncate text-sm text-muted-foreground">{application.companyName}</p>
-        <div className="mt-auto flex items-center justify-between gap-2 pt-5">
-          <StatusBadge status={application.status} />
-          <span className="text-xs text-muted-foreground">{formatDate(application.createdAt)}</span>
-        </div>
-        </motion.div>
-      </Link>
+        {/* state: hands the application to the detail page, so its header can be drawn immediately */}
+        <Link to={`/applications/${application.id}`} state={{ application }} className="group block h-full rounded-xl">
+          {/* layoutId: the detail page's header has the same one, so this card grows into it */}
+          <motion.div
+            layoutId={`application-${application.id}`}
+            transition={{ type: 'spring', duration: 0.38, bounce: 0.12 }}
+            className="flex h-full flex-col rounded-xl border bg-card p-5 transition-shadow group-hover:shadow-raised"
+          >
+            {/* A fixed-height top row, so the titles of all cards start on the same line */}
+            <div className="flex h-12 items-center justify-between gap-3">
+              <StatusBadge status={application.status} />
+              {application.matchScore === null ? (
+                <span className="text-xs text-muted-foreground">Not analyzed yet</span>
+              ) : (
+                <ScoreRing score={application.matchScore} size="sm" />
+              )}
+            </div>
+            <h2 className="mt-3 line-clamp-2 text-base font-semibold leading-snug">{application.jobTitle}</h2>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{application.companyName}</p>
+            <p className="mt-auto pt-5 text-xs text-muted-foreground">Added {formatRelativeDate(application.createdAt)}</p>
+          </motion.div>
+        </Link>
       </TiltCard>
     </motion.li>
   )
@@ -95,6 +88,9 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  // How many applications each status has, shown inside the filter tabs
+  const [counts, setCounts] = useState<Record<ApplicationStatus, number> | null>(null)
+  usePageTitle('Applications')
 
   const isBoard = view === 'board'
 
@@ -119,14 +115,15 @@ export default function DashboardPage() {
   // What the onboarding checklist needs to know. It is only shown while a step is still open.
   useEffect(() => {
     Promise.all([api.listResumes(), api.getInsights(), api.listApplications(null, 0, 1)])
-      .then(([resumes, insights, firstPage]) =>
+      .then(([resumes, insights, firstPage]) => {
+        setCounts(insights.applicationsByStatus)
         setOnboarding({
           hasResume: resumes.length > 0,
           hasApplication: insights.totalApplications > 0,
           hasAnalysis: insights.analyzedApplications > 0,
           firstApplicationId: firstPage.content[0]?.id ?? null,
-        }),
-      )
+        })
+      })
       .catch(() => setOnboarding(null))
   }, [])
 
@@ -154,13 +151,17 @@ export default function DashboardPage() {
           },
       )
     const previous = application.status
+    const moveCount = (from: ApplicationStatus, to: ApplicationStatus) =>
+      setCounts((current) => current && { ...current, [from]: current[from] - 1, [to]: current[to] + 1 })
     setStatus(status)
+    moveCount(previous, status)
     try {
       await api.updateStatus(application.id, status)
       toast.success(`${application.companyName} moved to ${statusLabel(status)}`)
       if (status === 'OFFER') celebrateOffer()
     } catch (err) {
       setStatus(previous)
+      moveCount(status, previous)
       toast.error('Could not move the application', {
         description: `${errorMessage(err)} It is back in ${statusLabel(previous)}.`,
       })
@@ -176,7 +177,7 @@ export default function DashboardPage() {
     <PageTransition>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">My applications</h1>
+          <h1 className="text-2xl font-semibold sm:text-3xl">My applications</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {result ? (
               <>
@@ -224,7 +225,7 @@ export default function DashboardPage() {
                 value={filter}
                 options={[
                   { value: 'ALL', label: 'All' },
-                  ...STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
+                  ...STATUSES.map((status) => ({ value: status, label: statusLabel(status), count: counts?.[status] })),
                 ]}
               />
             </div>
@@ -246,8 +247,8 @@ export default function DashboardPage() {
           </div>
         ) : nothingYet && onboardingOpen ? (
           // The checklist above already says what to do first, so no second empty message here
-          <p className="rounded-2xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-            No applications yet. Your applications will appear here.
+          <p className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+            No applications yet. They will appear here once you add the first one.
           </p>
         ) : isBoard ? (
           <KanbanBoard applications={applications} onMove={moveApplication} />
@@ -256,11 +257,11 @@ export default function DashboardPage() {
             <EmptyState
               icon={Plus}
               title="No applications yet"
-              description="Create your first one: paste a job posting and let the AI compare it with your resume."
+              description="Add the first job you are interested in. Paste the posting and you will see how well your resume fits it."
               action={
                 <MotionButton asChild size="lg">
                   <Link to="/applications/new">
-                    <Plus /> Create your first application
+                    <Plus /> Add your first application
                   </Link>
                 </MotionButton>
               }
@@ -269,7 +270,7 @@ export default function DashboardPage() {
             <EmptyState
               icon={SearchX}
               title={`No applications with status ${statusLabel(filter)}`}
-              description="Try another filter, or change the status of an application on its page."
+              description="Nothing is at this stage right now. Choose another status, or move an application here from its page."
             />
           )
         ) : (

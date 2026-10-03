@@ -24,7 +24,7 @@ function OrbNumber({ score }: { score: number }) {
   return (
     <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
       {/* The solid background keeps the number readable whatever color the orb has behind it */}
-      <span className="flex flex-col items-center rounded-xl bg-card/90 px-2 py-0.5 shadow-card backdrop-blur-sm">
+      <span className="flex flex-col items-center rounded-xl bg-card/90 px-2 py-0.5 backdrop-blur-sm">
         <span className={`text-2xl font-bold leading-tight tabular-nums tracking-tight ${scoreTone(score).text}`} data-testid="score">
           {shown}
         </span>

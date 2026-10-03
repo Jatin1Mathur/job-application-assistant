@@ -9,25 +9,31 @@ import Logo from './Logo.tsx'
 import ThemeToggle from './ThemeToggle.tsx'
 import { Button } from './ui/button.tsx'
 
-const navLink = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors sm:px-3 ${
-    isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-  }`
-
 const NAV = [
   { to: '/dashboard', label: 'Applications', icon: LayoutDashboard },
   { to: '/insights', label: 'Insights', icon: BarChart3 },
   { to: '/resumes', label: 'Resumes', icon: FileText },
 ]
 
-// The frame around every page for logged-in users: top bar with navigation, search, theme toggle and log out
+const topLink = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+    isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+  }`
+
+// On a phone: a bar at the bottom, where the thumb is, with an icon and a word for each place
+const bottomLink = ({ isActive }: { isActive: boolean }) =>
+  `flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
+    isActive ? 'text-primary' : 'text-muted-foreground'
+  }`
+
+// The frame around every page for logged-in users: navigation, search, theme toggle and log out
 export default function Layout({ children }: { children: ReactNode }) {
   const { email, logout } = useAuth()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
 
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-dvh">
       {/* The first thing a keyboard user reaches: jump past the navigation */}
       <a
         href="#main"
@@ -35,18 +41,17 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         Skip to content
       </a>
-      <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:px-6">
-          <div className="flex items-center gap-2 lg:gap-5">
-            <Link to="/dashboard" className="hidden lg:block">
+      <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
+          <div className="flex items-center gap-2 lg:gap-6">
+            <Link to="/dashboard" aria-label="Job Assistant, go to applications" className="flex min-h-11 items-center rounded-lg">
               <Logo />
             </Link>
-            <nav aria-label="Main" className="flex items-center gap-0.5 sm:gap-1">
+            <nav aria-label="Main" className="hidden items-center gap-1 sm:flex">
               {NAV.map(({ to, label, icon: Icon }) => (
-                <NavLink key={to} to={to} className={navLink} aria-label={label}>
+                <NavLink key={to} to={to} className={topLink}>
                   <Icon className="size-4" />
-                  {/* On a phone only the icons fit */}
-                  <span className="hidden sm:inline">{label}</span>
+                  {label}
                 </NavLink>
               ))}
             </nav>
@@ -56,7 +61,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               type="button"
               onClick={() => setPaletteOpen(true)}
               aria-label="Search and commands"
-              className="flex h-9 items-center gap-2 rounded-lg border bg-card px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted md:w-44"
+              className="flex h-11 w-11 items-center justify-center gap-2 rounded-lg border bg-card text-sm text-muted-foreground transition-colors hover:bg-muted sm:h-9 md:w-44 md:justify-start md:px-2.5"
             >
               <Search className="size-4" />
               <span className="hidden flex-1 text-left md:inline">Search…</span>
@@ -82,9 +87,24 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main id="main" tabIndex={-1} className="relative mx-auto max-w-6xl px-4 py-8 outline-none sm:px-6">
+
+      {/* pb-24 on phones leaves room for the bottom bar */}
+      <main id="main" tabIndex={-1} className="relative mx-auto max-w-6xl px-4 pb-24 pt-8 outline-none sm:px-6 sm:pb-12">
         {children}
       </main>
+
+      <nav
+        aria-label="Main"
+        className="fixed inset-x-0 bottom-0 z-20 flex border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden"
+      >
+        {NAV.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} className={bottomLink}>
+            <Icon className="size-5" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+
       <CommandCenter
         paletteOpen={paletteOpen}
         setPaletteOpen={setPaletteOpen}

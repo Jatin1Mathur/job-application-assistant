@@ -6,6 +6,8 @@ export interface TabOption {
   value: string
   label: string
   icon?: LucideIcon
+  // An optional number shown after the label, e.g. how many applications have this status
+  count?: number
 }
 
 // A row of tabs where the highlight slides from the old tab to the new one.
@@ -25,7 +27,7 @@ export default function AnimatedTabsList({
 }) {
   return (
     <TabsList aria-label={label} className="group-data-horizontal/tabs:h-9">
-      {options.map(({ value: optionValue, label: optionLabel, icon: Icon }) => (
+      {options.map(({ value: optionValue, label: optionLabel, icon: Icon, count }) => (
         <TabsTrigger
           key={optionValue}
           value={optionValue}
@@ -35,12 +37,13 @@ export default function AnimatedTabsList({
           {value === optionValue && (
             <motion.span
               layoutId={`tab-highlight-${id}`}
-              className="absolute inset-0 -z-10 rounded-md bg-background shadow-card dark:bg-input/40"
+              className="absolute inset-0 -z-10 rounded-md bg-background dark:bg-input/40"
               transition={{ type: 'spring', duration: 0.3, bounce: 0.15 }}
             />
           )}
           {Icon && <Icon />}
           {optionLabel}
+          {count !== undefined && <span className="text-xs font-normal text-muted-foreground">{count}</span>}
         </TabsTrigger>
       ))}
     </TabsList>

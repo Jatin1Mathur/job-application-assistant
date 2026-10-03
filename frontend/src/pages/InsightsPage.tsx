@@ -15,8 +15,9 @@ import SkillUniverseSection from '../components/SkillUniverseSection.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
 import { scoreTone } from '../lib/format.ts'
 import { statusLabel } from '../lib/status.ts'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 
-const card = 'rounded-2xl border bg-card p-6 shadow-card'
+const card = 'rounded-xl border bg-card p-6'
 
 // Chart text and grid lines use the theme's colors, so they are right in light and dark mode
 const axisTick = { fill: 'var(--muted-foreground)', fontSize: 12 }
@@ -65,6 +66,7 @@ function HiddenTable({ caption, rows, valueHeader }: { caption: string; rows: { 
 }
 
 export default function InsightsPage() {
+  usePageTitle('Insights')
   const [insights, setInsights] = useState<Insights | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -89,9 +91,9 @@ export default function InsightsPage() {
         <div aria-busy="true" aria-label="Loading insights">
           <Skeleton className="h-8 w-40" />
           <div className="mt-6 grid gap-6 lg:grid-cols-3">
-            <Skeleton className="h-72 rounded-2xl lg:col-span-2" />
-            <Skeleton className="h-72 rounded-2xl" />
-            <Skeleton className="h-80 rounded-2xl lg:col-span-3" />
+            <Skeleton className="h-72 rounded-xl lg:col-span-2" />
+            <Skeleton className="h-72 rounded-xl" />
+            <Skeleton className="h-80 rounded-xl lg:col-span-3" />
           </div>
         </div>
       </PageTransition>
@@ -101,15 +103,15 @@ export default function InsightsPage() {
   if (insights.totalApplications === 0) {
     return (
       <PageTransition>
-        <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
+        <h1 className="text-2xl font-semibold sm:text-3xl">Insights</h1>
         <div className="mt-6">
           <EmptyState
             icon={BarChart3}
             title="No insights yet"
-            description="Insights appear once you have applications. Create one and analyze it to see your numbers."
+            description="Once you have added and analyzed an application, this page shows where your applications stand and which skills come up most."
             action={
               <MotionButton asChild size="lg">
-                <Link to="/applications/new">Create an application</Link>
+                <Link to="/applications/new">Add an application</Link>
               </MotionButton>
             }
           />
@@ -125,7 +127,7 @@ export default function InsightsPage() {
 
   return (
     <PageTransition>
-      <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
+      <h1 className="text-2xl font-semibold sm:text-3xl">Insights</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         <AnimatedNumber value={insights.totalApplications} />{' '}
         {insights.totalApplications === 1 ? 'application' : 'applications'},{' '}
@@ -190,8 +192,8 @@ export default function InsightsPage() {
           ) : (
             <>
               {topSkill && (
-                <p className="mt-4 flex items-start gap-2.5 rounded-xl border border-primary/15 bg-accent/60 px-4 py-3 text-sm" data-testid="skill-hint">
-                  <Lightbulb className="mt-0.5 size-4 shrink-0 text-amber-500" />
+                <p className="mt-4 flex items-start gap-2.5 rounded-lg bg-encourage px-4 py-3 text-sm text-encourage-foreground" data-testid="skill-hint">
+                  <Lightbulb className="mt-0.5 size-4 shrink-0" />
                   <span>
                     Learning <strong>{topSkill.skill}</strong> would improve {topSkill.applications} of your{' '}
                     {insights.analyzedApplications} analyzed{' '}

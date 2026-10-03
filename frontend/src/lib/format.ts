@@ -12,3 +12,14 @@ export function scoreTone(score: number) {
   }
   return { label: 'Weak match', text: 'text-rose-700 dark:text-rose-400', stroke: 'stroke-rose-500' }
 }
+
+// "today", "yesterday", "5 days ago", and a normal date once it is more than two weeks ago.
+// For a job hunt, how long ago something happened matters more than the exact day.
+export function formatRelativeDate(iso: string): string {
+  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const days = Math.round((startOfDay(new Date()) - startOfDay(new Date(iso))) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days <= 14) return `${days} days ago`
+  return `on ${formatDate(iso)}`
+}

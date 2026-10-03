@@ -14,10 +14,11 @@ import { Alert, AlertDescription } from '../components/ui/alert.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Label } from '../components/ui/label.tsx'
 import { staggerItem, staggerList } from '../lib/motion.ts'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 
 const PITCH = [
-  { icon: Target, title: 'AI match score', text: 'See how well your resume fits a job, with matching and missing skills.' },
-  { icon: FileText, title: 'Cover letters in seconds', text: 'Written from your real resume. No invented experience.' },
+  { icon: Target, title: 'A match score with reasons', text: 'See the skills you already have and the ones to work on.' },
+  { icon: FileText, title: 'A cover letter draft', text: 'Written from your real resume. Nothing is invented.' },
   { icon: LayoutDashboard, title: 'Every application in one place', text: 'Track each job from saved to offer.' },
 ]
 
@@ -28,13 +29,13 @@ function PitchPanel() {
       {/* Two soft blobs that drift slowly behind the text */}
       <motion.div
         aria-hidden
-        className="absolute -left-24 -top-24 size-96 rounded-full bg-brand/25 blur-3xl"
+        className="absolute -left-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl"
         animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
         transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         aria-hidden
-        className="absolute -bottom-32 -right-20 size-[28rem] rounded-full bg-emerald-300/15 blur-3xl"
+        className="absolute -bottom-32 -right-20 size-[28rem] rounded-full bg-[#ffeccd]/10 blur-3xl"
         animate={{ x: [0, -30, 0], y: [0, -40, 0] }}
         transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -43,16 +44,16 @@ function PitchPanel() {
         <Logo light />
       </div>
       <motion.div className="relative" variants={staggerList} initial="hidden" animate="show">
-        <motion.h2 variants={staggerItem} className="max-w-md text-5xl font-semibold leading-[1.05] tracking-tight text-white">
-          Apply smarter, not harder.
+        <motion.h2 variants={staggerItem} className="max-w-md font-display text-5xl font-semibold leading-[1.05] text-white">
+          Know where you stand before you apply.
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-4 max-w-md text-base text-white/75">
-          Your personal assistant for the job hunt, powered by an AI model that runs on your own machine.
+          Compare your resume with any job posting, see what to work on, and keep every application in one place.
         </motion.p>
         <ul className="mt-10 space-y-5">
           {PITCH.map(({ icon: Icon, title, text }) => (
             <motion.li key={title} variants={staggerItem} className="flex gap-4">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-foreground">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/12 text-white ring-1 ring-white/25">
                 <Icon className="size-5" />
               </span>
               <span>
@@ -63,7 +64,7 @@ function PitchPanel() {
           ))}
         </ul>
       </motion.div>
-      <p className="relative text-xs text-white/50">Spring Boot · React · Ollama</p>
+      <p className="relative text-xs text-white/60">The analysis runs on a local AI model.</p>
     </div>
   )
 }
@@ -79,6 +80,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
   const isLogin = mode === 'login'
   const cameFrom = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  usePageTitle(isLogin ? 'Log in' : 'Create account')
 
   if (token) {
     return <Navigate to={cameFrom} replace />
@@ -90,7 +92,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setLoading(true)
     try {
       await (isLogin ? login(email, password) : register(email, password))
-      toast.success(isLogin ? 'Welcome back!' : 'Account created. Welcome!')
+      toast.success(isLogin ? 'You are logged in' : 'Your account is ready')
       navigate(cameFrom, { replace: true })
     } catch (err) {
       setError(errorMessage(err))
@@ -122,11 +124,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1 className="text-3xl font-semibold">
                 {isLogin ? 'Welcome back' : 'Create your account'}
               </h1>
               <p className="mt-1.5 text-sm text-muted-foreground">
-                {isLogin ? 'Log in to continue your job hunt.' : 'It takes less than a minute.'}
+                {isLogin ? 'Log in to continue your job search.' : 'An email address and a password are all you need.'}
               </p>
 
               <form onSubmit={submit} className="mt-7 space-y-4">
@@ -174,7 +176,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   to={isLogin ? '/register' : '/login'}
                   state={location.state}
                   onClick={() => setError(null)}
-                  className="font-semibold text-foreground underline decoration-brand decoration-2 underline-offset-4 hover:decoration-foreground"
+                  className="rounded font-semibold text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary"
                 >
                   {isLogin ? 'Create one' : 'Log in'}
                 </Link>

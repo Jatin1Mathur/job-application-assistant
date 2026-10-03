@@ -1,128 +1,439 @@
-# Design of Job Assistant
+---
+version: alpha
+name: Job Assistant
+description: "A calm, warm-paper interface for people who are looking for a job. Warm off-white canvas, warm charcoal ink, and one accent: a deep teal called tide, used for the one action that moves the user forward. A soft serif (Fraunces) speaks only in page titles; a friendly, highly legible sans (Figtree) does all the work. Cards are flat with a hairline border; shadows appear only when something is lifted. A warm sand wash marks encouraging messages. Green, amber and red are reserved for the match score and skills and never decorate."
 
-I built Job Assistant as a master's student who is applying for internships and jobs myself. This document explains who I designed it for, the principles I followed, and why the interface looks and moves the way it does. It also lists three trade-offs I made on purpose.
+colors:
+  # Light mode
+  canvas: "#f9f6f1"
+  surface: "#fffdfa"
+  surface-muted: "#f0ede8"
+  ink: "#1e1a14"
+  ink-muted: "#5e5a53"
+  hairline: "#e1ded7"
+  control-border: "#8a857e"
+  tide: "#006375"
+  on-tide: "#fdfcf8"
+  tide-wash: "#ddf1f6"
+  on-tide-wash: "#00404e"
+  sand-wash: "#ffeccd"
+  on-sand-wash: "#1e1a14"
+  danger: "#c21725"
+  # Dark mode
+  dark-canvas: "#13110e"
+  dark-surface: "#1e1b18"
+  dark-surface-muted: "#282622"
+  dark-ink: "#f1eee9"
+  dark-ink-muted: "#aeaaa4"
+  dark-hairline: "#32302c"
+  dark-control-border: "#78746e"
+  dark-tide: "#77ced8"
+  dark-on-tide: "#04191f"
+  dark-tide-wash: "#12333a"
+  dark-on-tide-wash: "#a9e4ea"
+  dark-sand-wash: "#382c15"
+  dark-danger: "#ff6467"
+  # Meaning colors (same roles in both modes; never decorative)
+  match-strong: "#10b981"
+  match-partial: "#f59e0b"
+  match-weak: "#f43f5e"
+  status-saved: "#94a3b8"
+  status-applied: "#3b82f6"
+  status-interview: "#f59e0b"
+  status-offer: "#10b981"
+  status-rejected: "#f43f5e"
 
-The design tokens live in `frontend/src/index.css`. The shared motion settings live in `frontend/src/lib/motion.ts`. The 3D scenes live in `frontend/src/three/`.
+typography:
+  display-xl:
+    fontFamily: Fraunces Variable
+    fontSize: 60px
+    fontWeight: 600
+    lineHeight: 1.05
+    letterSpacing: -0.02em
+  display-lg:
+    fontFamily: Fraunces Variable
+    fontSize: 36px
+    fontWeight: 600
+    lineHeight: 1.15
+    letterSpacing: -0.02em
+  page-title:
+    fontFamily: Fraunces Variable
+    fontSize: 30px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: -0.02em
+  section-title:
+    fontFamily: Figtree Variable
+    fontSize: 16px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: -0.01em
+  body-lg:
+    fontFamily: Figtree Variable
+    fontSize: 18px
+    fontWeight: 400
+    lineHeight: 1.6
+  body:
+    fontFamily: Figtree Variable
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.55
+  reading:
+    fontFamily: Figtree Variable
+    fontSize: 15px
+    fontWeight: 400
+    lineHeight: 1.65
+  label:
+    fontFamily: Figtree Variable
+    fontSize: 14px
+    fontWeight: 500
+    lineHeight: 1.4
+  caption:
+    fontFamily: Figtree Variable
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.4
+  score:
+    fontFamily: Figtree Variable
+    fontSize: 24px
+    fontWeight: 700
+    lineHeight: 1.1
+    fontFeature: tnum
 
-## 1. Who it is for and what problem it solves
+rounded:
+  sm: 6px
+  md: 8px
+  lg: 10px
+  xl: 14px
+  2xl: 18px
+  pill: 9999px
 
-**Target users.** Students and early-career developers who apply to many positions at the same time. I am one of them, so the problems below come from my own job search, not from a formal user study. A study with other applicants is the first thing I would add with more time.
+spacing:
+  unit: 4px
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  2xl: 32px
+  3xl: 48px
+  4xl: 80px
 
-**Their problems.**
+components:
+  button-primary:
+    backgroundColor: "{colors.tide}"
+    textColor: "{colors.on-tide}"
+    typography: "{typography.label}"
+    rounded: "{rounded.lg}"
+    height: 36px
+    padding: 0 12px
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    rounded: "{rounded.lg}"
+    border: "1px solid {colors.hairline}"
+    height: 36px
+  button-quiet-danger:
+    backgroundColor: transparent
+    textColor: "{colors.danger}"
+    typography: "{typography.label}"
+    rounded: "{rounded.lg}"
+  text-link:
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    underline: "2px {colors.tide} at 40% opacity, 4px offset"
+  card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+    border: "1px solid {colors.hairline}"
+    padding: 20px
+  card-lifted:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.xl}"
+    shadow: "0 12px 28px -12px rgba(30,26,20,0.22), 0 3px 8px -2px rgba(30,26,20,0.08)"
+  text-input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.lg}"
+    border: "1px solid {colors.control-border}"
+    height: 40px
+  text-input-focused:
+    border: "1px solid {colors.tide}"
+    outline: "3px {colors.tide} at 50% opacity"
+  status-badge:
+    typography: "{typography.caption}"
+    rounded: "{rounded.pill}"
+    padding: 4px 10px
+  skill-tag-matching:
+    backgroundColor: "{colors.match-strong} at 10% opacity"
+    textColor: "#047857"
+    rounded: "{rounded.pill}"
+  skill-tag-missing:
+    backgroundColor: "{colors.match-weak} at 10% opacity"
+    textColor: "#be123c"
+    rounded: "{rounded.pill}"
+  encouragement-note:
+    backgroundColor: "{colors.sand-wash}"
+    textColor: "{colors.on-sand-wash}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    padding: 12px 16px
+  tab-bar-phone:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink-muted}"
+    activeTextColor: "{colors.tide}"
+    height: 56px
+---
 
-| Problem | What the app does about it |
-|---|---|
-| "Do I even fit this job?" Reading a long posting against my own resume is slow and I am biased about myself. | An AI match score from 0 to 100, with the skills that match and the skills that are missing. |
-| Writing a new cover letter for every application takes an evening. | A cover letter generated from the resume, limited to 300 words, that is told never to invent experience. |
-| After ten applications I lose track of which one is at which stage. | A dashboard as a list or as a Kanban board, one column per status. |
-| I do not see patterns. The same skill may be missing in many postings and I never notice. | An insights page that counts the most often missing skills across all analyzed applications. |
-| I do not want to paste my resume into a cloud chatbot. | The AI model runs locally through Ollama. |
+# Job Assistant design system
 
-## 2. Design principles
+## Overview
 
-1. **The answer first.** The most important thing on a screen is the largest thing on it: the score on the application page, the status columns on the board, the missing skill on the insights page.
-2. **Show the evidence.** A score alone is not trustworthy. The Compare tab puts my resume next to the job description and marks the skills, so I can check whether the AI was right.
-3. **Honest about the AI.** The interface says when an answer came from the cache, which model made it and when, and reminds the user to read the cover letter before sending it. The animated "steps" while the AI works are an illustration of the wait, not real progress, and the code comments say so.
-4. **Calm by default, expressive at key moments.** Most of the interface is quiet paper and ink. Color, motion and 3D are saved for the moments that matter: the first impression, a result arriving, a card moving, an offer.
-5. **Works for everyone.** Keyboard, screen reader, phone, dark mode and reduced motion are part of the design, not extras added at the end.
+Job Assistant is a career tool. The person using it is looking for a job, which is a stressful, repetitive task with a lot of waiting and a lot of rejection. The interface should feel like a steady desk to work at: **confident, calm, and encouraging**.
 
-## 3. Color
+- **Confident** means clear statements, one obvious next action, and numbers shown plainly. The score is a number, not a mood.
+- **Calm** means warm paper instead of white, few colors, no decoration competing with the content, and motion that explains instead of entertaining.
+- **Encouraging** means the interface always shows the next step, phrases gaps as things to work on, and saves its one celebration for an offer.
 
-I wanted the app not to look like a default template, where a white page with an indigo button is the common starting point. The palette has three parts.
+The system is built from four ideas:
 
-**Paper and ink (the neutrals).** The background is a warm off-white (`oklch(0.975 0.008 95)`) and the text is a green-black (`oklch(0.21 0.02 165)`), not pure white and pure black. A job search is stressful, and a warm paper tone feels calmer and more like a document than a dashboard. In dark mode the two swap: a green-black background with warm off-white text.
+1. **Paper and ink.** A warm off-white canvas (`{colors.canvas}`) with warm charcoal text (`{colors.ink}`). All neutrals share one warm hue, so nothing looks cold or clinical.
+2. **One accent, tide.** A deep teal (`{colors.tide}`) used for the primary action, the active place in the navigation, links, and the focus ring. Nothing else is teal.
+3. **A warm wash for encouragement.** `{colors.sand-wash}` is a surface tint for "your next step" and "a tip for you". It is not a second accent: it never carries buttons, icons, or text color.
+4. **Meaning colors are reserved.** Green, amber and red mean strong, partial and weak match (and matching or missing skills). The five statuses have their own dot colors. None of them is ever used as decoration.
 
-**One strong accent: electric lime** (`--brand`, `oklch(0.9 0.2 125)`). I use it sparingly: the logo, the marker stroke behind "not harder." on the landing page, active navigation, progress, the glowing spheres of the 3D scenes, and in dark mode the main button. One accent means that when lime appears, it means "this is the brand" or "this is the next step", and nothing else.
+**Key characteristics**
 
-Lime is a difficult color: it is very bright, so lime text on a light background is unreadable. I solved this with a rule instead of a compromise color:
+- Warm paper canvas with flat, hairline-bordered cards. Shadows appear only when something is lifted (hover, drag, dialogs).
+- A soft serif (Fraunces) for page titles and landing headlines only; a friendly sans (Figtree) for everything inside the app.
+- One filled teal button per view. Secondary actions are outlined; rare, destructive actions are quiet text at the end of the page.
+- The answer comes first: the largest element on a screen is what the user came for (the score, the board, the missing skill).
+- Every control is at least 44 px tall on touch screens, and the phone has a labelled tab bar at the bottom.
+- 3D appears in three places only (landing hero, score, insights) and always has a flat fallback.
 
-- Lime is never used as text on a light background. It is always a **surface with ink text on it** (contrast 13.6:1).
-- In light mode the main button is ink with paper text (14.7:1). In dark mode the main button is lime with ink text (13.9:1).
-- The keyboard focus ring is ink in light mode and lime in dark mode, so it always has strong contrast with the page.
+## Colors
 
-**Meaning colors (semantic).** Green, yellow and red are reserved for the score and the skills: green for a strong match and matching skills, yellow for a partial match, red for a weak match and missing skills. The five statuses have their own dot colors. These colors are never used for decoration, so they keep their meaning. They are also never the only signal: a status always has its name next to the dot, and the score always has a number and a label.
+### Brand and accent
 
-**Charts use one color.** I tested the five status colors as a chart palette with a color-blindness check, and red and green were too close to tell apart. So both charts use a single color, with the name on the axis and the value written at the end of the bar.
+- **Tide** `{colors.tide}` (#006375): primary buttons, active navigation, links, focus ring, progress, the logo mark. In dark mode it becomes `{colors.dark-tide}` (#77ced8) with dark text on it.
+- **Tide wash** `{colors.tide-wash}`: the background of the active navigation item and of small numbered markers.
 
-## 4. Typography
+### Surface
 
-- **Fraunces** for headings. It is a serif with soft, slightly irregular shapes. It gives the product a voice, and a serif heading on warm paper makes the app feel closer to a letter or a CV than to an admin tool.
-- **Geist** for everything else. It is a clean sans-serif that stays readable at small sizes and has tabular numbers, which matters for scores and counts that change.
+- **Canvas** `{colors.canvas}`: the page.
+- **Surface** `{colors.surface}`: cards, inputs, dialogs.
+- **Surface muted** `{colors.surface-muted}`: quiet areas such as "not analyzed yet" notes and tab tracks.
+- **Hairline** `{colors.hairline}`: card borders and dividers.
+- **Control border** `{colors.control-border}`: input and select borders. It is darker than the hairline on purpose, so a field can be found without relying on its fill (3:1 against the surface).
 
-The pairing follows a simple rule: character where there is little text (headings), neutrality where there is a lot (body, forms, tables). Both fonts are bundled with the app, so no request goes to a font server.
+### Text
 
-## 5. Spacing, radius and shadows
+- **Ink** `{colors.ink}`: all primary text.
+- **Ink muted** `{colors.ink-muted}`: secondary text, captions, placeholders.
 
-All three are tokens, so the interface stays consistent.
+Both pass 4.5:1 on the canvas, the surface and the muted surface in light and dark mode.
 
-- **Spacing** uses one 4-pixel scale. Cards have 20 to 24 px of padding, sections are 24 px apart.
-- **Radius** comes from one base value (`--radius: 0.75rem`). Small controls use a smaller step and cards a larger one.
-- **Shadows** have exactly three steps: `shadow-card` (a card at rest), `shadow-raised` (hovered or dragged), `shadow-pop` (a floating layer). The shadows are tinted with the ink color instead of pure black, which looks softer on the paper background. In dark mode shadows are barely visible, so cards are separated by a border and a slightly lighter surface instead.
+### Semantic
 
-## 6. 3D: where I use it and where I do not
+- **Match strong / partial / weak**: the score and its label. Always shown with the number and a word ("Strong match"), never as color alone.
+- **Status colors**: a small dot next to the status name. The name is always written.
+- **Danger** `{colors.danger}`: destructive actions and error messages.
+- **Sand wash** `{colors.sand-wash}`: encouraging notes.
 
-I use real 3D (WebGL, with three.js through React Three Fiber) in exactly three places, and each has a reason.
+Charts use a single color (tide) with the name on the axis and the value at the bar, because the five status colors are not distinguishable enough for color-blind readers when used as a chart palette.
 
-| Place | What it shows | Why 3D helps here |
+## Typography
+
+### Font family
+
+- **Display: Fraunces Variable.** A serif with soft, slightly irregular shapes. It gives the product a human voice. Fallback: `ui-serif, Georgia, serif`.
+- **Text: Figtree Variable.** A geometric sans with open shapes that stays friendly and legible at 12 to 14 px. Fallback: `ui-sans-serif, system-ui, sans-serif`.
+
+Both fonts are bundled with the app. No request goes to a font server.
+
+### Hierarchy
+
+| Role | Token | Use |
 |---|---|---|
-| Landing page hero: the **skill galaxy** | Skills as glowing spheres connected by lines, slowly turning, leaning gently towards the mouse. Skills you have glow in the accent color; skills to learn are dimmer. | A visitor decides in seconds whether a product is worth a look. The galaxy shows the core idea, "your skills against a job's skills", before a single word is read. Nobody has to operate it. |
-| Analysis result: the **score orb** | A glass orb that fills up and turns from red over yellow to green while the number counts up. | The score is the moment the user waited up to a minute for. Filling up is a physical picture of "how much of this job do I cover". |
-| Insights: the **skill universe** | The most often missing skills as spheres. Bigger and closer means missing more often; hovering shows the number. | Depth is a natural way to show importance: what is close feels urgent. It invites exploring, which fits a page meant for reflection. |
+| Landing headline | `{typography.display-xl}` | One per landing page |
+| Landing section heading | `{typography.display-lg}` | Section headings on the landing page |
+| Page title | `{typography.page-title}` | The one `h1` of each app page |
+| Section title | `{typography.section-title}` | Headings inside cards and sections |
+| Body | `{typography.body}` | Interface text |
+| Reading | `{typography.reading}` | Long text meant to be read: the cover letter |
+| Label | `{typography.label}` | Buttons, form labels, navigation |
+| Caption | `{typography.caption}` | Dates, counts, hints |
+| Score | `{typography.score}` | The match score and other key numbers |
 
-**Why not on the dashboard and the Kanban board.** These are the screens where I work: I read many titles, compare statuses, and drag cards. Work screens need three things that 3D makes worse:
+### Principles
 
-- **Reading speed.** Flat text in straight rows is the fastest thing to scan. Perspective makes text smaller, tilted or overlapping.
-- **Precise pointing.** Dragging a card to a column needs a stable, predictable target. A moving or tilted scene makes targets harder to hit, and harder still on a phone.
-- **Keyboard and screen reader use.** A list and a board have a clear order. A 3D scene does not.
+- **The serif speaks once per screen.** Page titles and landing headlines use Fraunces. Headings inside the app use Figtree, because a serif at 16 px is slower to scan in a dense interface.
+- **Sentence case everywhere.** No all-caps labels and no title case.
+- **Tabular numbers.** Scores, counts and dates use tabular figures so they line up and do not jump when they change.
+- **Readable measure.** Paragraphs stop at about 60 to 68 characters per line.
+- **Balanced headings.** Headings use `text-wrap: balance`; paragraphs use `text-wrap: pretty`.
+- **Tight, not squeezed.** Display sizes use -0.02em letter-spacing; text sizes use 0 to -0.01em.
 
-So the dashboard and the board stay 2D. The only 3D-like touch there is a **tilt of a few degrees** when the mouse is over a card in the list. It is a plain CSS transform, it does not move the card's content out of place, and it is off on touch screens and with reduced motion.
+## Layout
 
-**3D is never the only way to get information.** The galaxy is decoration with a text description. The score is always a real number in normal text on top of the orb. The skill universe sits directly above a 2D bar chart with the same numbers, and a hidden table for screen readers.
+### Spacing system
 
-**The scenes match the design system.** The spheres use the lime accent, the lines use the ink color, the canvas is transparent so the paper background shows through, and the labels are normal page text in the app's font. The scene colors are defined per theme, so light and dark mode both work.
+One 4 px unit. Common steps: 8 px inside a group, 12 to 16 px between related elements, 24 px between cards, 48 px or more between page regions, 80 px between landing page sections.
 
-## 7. Performance decisions
+### Grid and container
 
-3D is the most expensive thing in this project, so I set rules for it.
+- A centered container with a maximum width of 1152 px and 16 px (phone) or 24 px (larger) side padding.
+- The dashboard is a grid of 1, 2 or 3 columns. The board has five equal columns on desktop and scrolls sideways inside its own area on a phone.
+- The application page is a main column (the result) beside a narrower, sticky column (what was compared).
 
-- **Lazy loading.** All 3D code is in separate files that are downloaded only when a 3D scene is about to be shown. The dashboard, the board, the forms and the login page never download it. The 3D code is about 937 kB (251 kB compressed); the main bundle grew by only about 12 kB.
-- **The page is usable before 3D arrives.** Each scene has a static version (the galaxy as a flat drawing, the orb as the 2D ring, the universe as flat bubbles). That static version is what is on screen while the 3D code loads, so text and buttons are never waiting for it.
-- **Limited pixel ratio.** Very sharp screens would render four to nine times as many pixels. I cap the ratio at 1.5 (1.25 on phones).
-- **Rendering stops when nobody is looking.** A scene stops drawing completely when it is scrolled off-screen or when the browser tab is in the background.
-- **Simpler scenes on phones.** Fewer skills, fewer triangles per sphere, no anti-aliasing.
-- **Cheap effects.** The glow is a second, transparent sphere, not a post-processing effect. Labels are page elements moved by a few lines of code, not text rendered in 3D.
-- **No 3D at all when it would not work or is not wanted.** Without WebGL, or with "reduce motion" switched on, the static version stays and the 3D code is never downloaded. If a scene crashes, the static version replaces it.
+### Whitespace philosophy
 
-## 8. Motion principles
+Tight inside a group, generous between groups. There is more space above a heading than below it, so a heading belongs to what follows.
 
-1. **Motion explains.** Every animation answers a question. "Where did my card go?" The card glides into its new column. "What did I open?" The dashboard card grows into the header of the detail page. "Did something change?" A number counts to its new value.
-2. **Fast.** Interface animations take between 0.15 and 0.4 seconds. The only slower movements are the ambient ones (the drifting background and the turning galaxy on the landing page) and the score orb filling up (about one second), because the score is the result the user was waiting for.
-3. **Never blocking.** No animation has to finish before the user can click. A dragged card moves immediately and the backend is updated in the background; if that fails, the card goes back and a message explains why.
-4. **One celebration.** Confetti appears only when an application moves to Offer. If it appeared for every action it would mean nothing.
-5. **Respect the user's setting.** With "reduce motion" switched on in the operating system, movement animations are off: there is no gliding, no growing, no tilt, no confetti, the landing page preview does not cycle, and the 3D scenes are replaced by their static versions. Numbers show their final value at once. Short fades remain, because they do not move anything.
+## Elevation and depth
 
-The techniques, for a reader of the code: shared `layoutId` for the card-to-page transition and the sliding tab highlight, `layout` for the Kanban cards, staggered variants for lists, and `MotionConfig reducedMotion="user"` at the root of the app.
+| Level | Treatment | Use |
+|---|---|---|
+| 0, flat | No border, no shadow | Page text, landing sections |
+| 1, card | 1 px `{colors.hairline}` border, no shadow | Every card and section at rest |
+| 2, lifted | Soft shadow, tinted with the ink color | A card under the mouse, a card being dragged |
+| 3, floating | Larger tinted shadow | Dialogs, the command palette, the landing preview card |
 
-## 9. Accessibility decisions
+Elevation is declared once: a card at rest has a border and no shadow. A shadow means "this is lifted right now". Shadows are tinted with the ink color, not pure black, and always have a downward offset so the light comes from above.
 
-- **Contrast.** I computed the contrast of the text and control colors of the design tokens against their backgrounds in both modes. Body and muted text are above 6:1, and every pair I checked meets the 4.5:1 target of WCAG AA for text. Input borders and focus rings are above 3:1. The colored score and status texts were checked on the card background; the lowest is 5:1.
-- **Visible keyboard focus.** Every link, button, tab and option gets a 2 px outline when reached by keyboard. It does not appear after a mouse click.
-- **Skip link.** The first Tab on a page reaches "Skip to content", so keyboard users do not have to pass the navigation every time.
-- **Everything works without a mouse.** The command palette (Cmd+K), the shortcuts, and the Kanban board (focus the handle, Space, arrow keys, Space) are all usable from the keyboard. Shortcuts are switched off while typing in a field.
-- **Screen readers.** Icon-only buttons have labels. Decorative elements are hidden. Each chart has a hidden table with the same numbers. Animated counters expose the final value, not the numbers in between. Each 3D scene is announced as one picture with a description, for example "Match score 80 out of 100", and its canvas is hidden from the screen reader.
-- **3D never blocks.** The galaxy and the orb ignore the mouse and touch completely, so they cannot swallow a click or stop a scroll. The skill universe can be hovered or tapped, and a finger can still scroll the page over it.
-- **Color is never the only signal**, as described in the color section.
-- **Phone.** Every page is checked at 390 px width without sideways scrolling. The board scrolls inside its own area.
+In dark mode shadows are nearly invisible, so depth comes from a slightly lighter surface and the hairline.
 
-What I have **not** done: a test with a real screen reader user, and a full audit against every WCAG criterion. My checks were computed contrast values, keyboard walkthroughs and automated browser checks, including runs with WebGL switched off and with reduced motion. I also have not measured frame rates on real low-end phones; the phone checks were done at phone screen size on my laptop.
+### Decorative depth
 
-## 10. Three trade-offs I made
+The landing hero has three large, soft color washes (tide and sand) that drift slowly behind the content, and a 3D skill galaxy. Inside the app there is no decorative depth.
 
-**1. A distinctive accent color instead of an easy one.**
-Lime gives the product a recognizable identity, but it cannot be used as text on light backgrounds, and it is close to the green that means "match". I accepted two costs: the main button looks different in light mode (ink) and dark mode (lime), and I had to write down a strict rule for where lime is allowed. A blue accent would have needed neither, but the app would look like many others.
+## Shapes
 
-**2. 3D in three places, at the price of a large download.**
-The 3D scenes make the project memorable and they explain its idea, but three.js is big: about 251 kB compressed, close to the size of the rest of the app's code. I accepted that cost under three conditions: the code is only downloaded on pages that show a scene, every scene has a static version that appears first, and the work screens stay 2D. The alternative was to fake the galaxy with CSS, which would have been lighter but could not show real depth or the filling orb. A related small cost: the animated "AI steps" shown during the wait are an illustration, not real progress, because the local model sends one answer at the end.
+### Border radius scale
 
-**3. Optimistic updates on the board instead of waiting for the server.**
-When a card is dropped, the interface changes at once and the server is told afterwards. This makes the board feel instant, which matters for an action the user repeats often. The cost is complexity and a rare moment of "untruth": for a fraction of a second the screen shows a status the server has not confirmed. If the server refuses, the card moves back and an error message says so. For a personal job tracker I judged speed to be worth this; for something like a payment I would wait for the server.
+| Token | Value | Use |
+|---|---|---|
+| `{rounded.sm}` | 6 px | Key caps, small chips |
+| `{rounded.md}` | 8 px | Notes, inner blocks |
+| `{rounded.lg}` | 10 px | Buttons, inputs, selects |
+| `{rounded.xl}` | 14 px | Cards |
+| `{rounded.2xl}` | 18 px | The landing preview card |
+| `{rounded.pill}` | full | Status badges, skill tags, progress bars |
+
+Inner elements are tighter than their container. Pills are for small labels, never for buttons.
+
+### Illustration
+
+There are no stock photos and no drawn illustrations. Pictures are either real product output (the example analysis) or geometry (the skill galaxy, the score orb, the skill universe).
+
+## Components
+
+### Buttons
+
+- **Primary** (`button-primary`): filled tide. One per view. Its label names the action: "Analyze match", "Add application", "Create your account".
+- **Secondary** (`button-secondary`): outlined. Actions that support the primary one: "Copy", "Cancel".
+- **Text link** (`text-link`): ink with a teal underline. The second choice next to a primary button ("I already have an account").
+- **Quiet danger** (`button-quiet-danger`): red text without a fill, placed at the end of the page. Always confirmed in a dialog.
+
+Buttons press down slightly when held. On touch screens every button is at least 44 px tall.
+
+### Cards and containers
+
+A card is a flat surface with a hairline border and a 14 px radius. Cards are never nested. When content inside a card needs separating, a hairline divider is used instead of another box.
+
+### Inputs and forms
+
+Labels sit above the field and are always visible. Fields have a 3:1 border. Focus shows a teal border and a soft teal ring. Errors appear above the form as a short sentence that names the problem and, where possible, the fix.
+
+### Status and score
+
+- **Status badge**: a pill with a colored dot and the status name.
+- **Score**: a number out of 100 with a label ("Strong match"), shown in a ring or, where WebGL is available, in an orb that fills up.
+- **Skill tags**: green pills for skills the resume shows, red pills for skills it does not.
+
+### Encouragement note
+
+A sand-wash block for the next step, a tip, or a helpful pattern ("Learning Docker would improve 4 of your 6 analyzed applications"). It is the only place the warm wash appears.
+
+### Navigation
+
+- **Desktop**: a top bar with the logo, three labelled destinations, search, help, theme toggle and log out. The current destination has a tide wash.
+- **Phone**: a compact top bar and a tab bar fixed to the bottom with an icon and a word for each destination.
+- A "Skip to content" link is the first focusable element on every page.
+
+### Empty states
+
+An empty state has three parts: an icon in a quiet tile, one sentence that says what will appear here, and the action that makes it appear.
+
+## Motion
+
+- Interface motion takes 0.15 to 0.4 seconds and never blocks input.
+- Motion explains a change: a card grows into its page, a moved card glides to its column, a number counts to its new value.
+- One celebration: confetti when an application moves to Offer.
+- With "reduce motion" switched on, movement stops, numbers show their final value at once, and 3D scenes are replaced by flat pictures.
+
+## Voice and copy
+
+- Plain words, short sentences, active voice.
+- Speak to the user as "you". Say what happens next.
+- No exclamation marks, no "Oops", no hype words.
+- Gaps are "skills to work on", not failures.
+- Do not promise what the product cannot check. The cover letter note says "Read it through and check the facts before you send it."
+
+## Do's and don'ts
+
+### Do
+
+- Use tide for exactly one filled button per view, the active navigation item, links and focus.
+- Keep cards flat with a hairline. Add a shadow only while something is lifted.
+- Put the answer first and make it the largest thing on the screen.
+- Write the status and the match label in words next to their color.
+- Use the sand wash for encouragement and the next step, and for nothing else.
+- Keep every control at least 44 px tall on touch screens.
+- Give every 3D scene a flat fallback and a text equivalent.
+
+### Don't
+
+- Don't add a second accent color, and don't use green, amber or red as decoration.
+- Don't set headings inside the app in the serif. It speaks once per screen.
+- Don't nest a card inside a card.
+- Don't put a destructive action next to a frequent one.
+- Don't use all-caps labels, exclamation marks, or words like "seamless" and "supercharge".
+- Don't show a number without saying what it counts.
+- Don't use 3D on screens where people work (dashboard, board, forms).
+
+## Responsive behavior
+
+### Breakpoints
+
+| Name | Width | What changes |
+|---|---|---|
+| Phone | below 640 px | One column, bottom tab bar, the board scrolls sideways in its own area |
+| Tablet | 640 to 1023 px | Two-column card grid, top navigation with labels |
+| Desktop | 1024 px and up | Three-column grid, five board columns, two-column application page |
+
+### Touch targets
+
+At least 44 px tall for every button, link, tab and field on touch screens and narrow screens.
+
+### Collapsing strategy
+
+Columns stack in reading order: the result first, then what was compared. Sticky side columns become normal sections. Labels are never removed to save space; when space is short, the navigation moves to the bottom tab bar instead of becoming icon-only.
+
+## Iteration guide
+
+1. Start from the tokens in the front matter. A new color or radius needs a reason that fits the Overview.
+2. Decide what the user came to the screen for, and make that the largest element.
+3. Use one primary button. If two actions feel equally important, the screen is doing two jobs.
+4. Check both themes, a 390 px wide phone, keyboard focus, and reduced motion before calling it done.
+5. Compute contrast for any new text or control color: 4.5:1 for text, 3:1 for control borders and focus rings.
+
+## Known gaps
+
+- No test with real job seekers or with a screen reader user yet.
+- The match colors are standard green, amber and red; their text versions pass contrast, but the palette has not been tuned for every type of color blindness beyond always pairing color with words.
+- Frame rates of the 3D scenes have not been measured on real phones.
+- There is no custom "page not found" screen; unknown addresses return to the dashboard.

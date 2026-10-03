@@ -37,7 +37,9 @@ The dev server passes every `/api` call on to the backend on port 8080 (see `fro
 
 ## Design
 
-The design decisions (users, principles, colors, fonts, motion, accessibility and trade-offs) are explained in [DESIGN.md](DESIGN.md).
+- [DESIGN.md](DESIGN.md) is the design system: colors, typography, spacing, components, and do's and don'ts.
+- [docs/design-decisions.md](docs/design-decisions.md) explains the audit, what was changed and why, and the trade-offs.
+- [docs/screenshots](docs/screenshots) has every page before and after the redesign, in desktop and phone size, light and dark mode.
 
 ## Testing with Postman
 

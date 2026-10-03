@@ -52,7 +52,7 @@ function BoardCard({ application }: { application: Application }) {
       layoutId={`application-${application.id}`}
       transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
       data-testid={`board-card-${application.id}`}
-      className={`flex rounded-xl border bg-card shadow-card transition-shadow hover:shadow-raised ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex rounded-xl border bg-card transition-shadow hover:shadow-raised ${isDragging ? 'opacity-40' : ''}`}
     >
       <button
         type="button"
@@ -77,7 +77,7 @@ function Column({ status, applications }: { status: ApplicationStatus; applicati
       ref={setNodeRef}
       data-testid={`board-column-${status}`}
       aria-label={`${statusLabel(status)}, ${applications.length} applications`}
-      className={`flex w-64 shrink-0 snap-start flex-col rounded-2xl border p-2.5 transition-colors lg:w-auto lg:min-w-0 lg:flex-1 ${
+      className={`flex w-64 shrink-0 snap-start flex-col rounded-xl border p-2.5 transition-colors lg:w-auto lg:min-w-0 lg:flex-1 ${
         isOver ? 'border-primary/50 bg-accent/70' : 'bg-muted/40'
       }`}
     >

@@ -34,8 +34,8 @@ export interface ScenePalette {
 
 export function scenePalette(theme: 'light' | 'dark'): ScenePalette {
   return theme === 'dark'
-    ? { accent: '#c6f432', accentGlow: '#c6f432', dim: '#55635a', line: '#c6f432', lineOpacity: 0.16, light: '#ffffff' }
-    : { accent: '#a3d61f', accentGlow: '#b8ea2c', dim: '#b4bbb2', line: '#1f2a24', lineOpacity: 0.16, light: '#ffffff' }
+    ? { accent: '#77ced8', accentGlow: '#77ced8', dim: '#57534c', line: '#77ced8', lineOpacity: 0.18, light: '#ffffff' }
+    : { accent: '#1b7f93', accentGlow: '#3aa3b6', dim: '#c3beb5', line: '#1e1a14', lineOpacity: 0.16, light: '#ffffff' }
 }
 
 export interface SceneProps {

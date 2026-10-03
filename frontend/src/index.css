@@ -1,19 +1,22 @@
 @import 'tailwindcss';
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/figtree";
 @import "@fontsource-variable/fraunces";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* Type: Fraunces (a serif with character) for headings, Geist (clean and neutral) for everything else */
+  /* Type: Fraunces (a soft serif) only for page titles and landing headlines;
+     Figtree (a friendly, very legible sans) for everything else, including headings inside the app */
   --font-display: 'Fraunces Variable', ui-serif, Georgia, serif;
-  --font-heading: var(--font-display);
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-sans: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
-  /* Three shadow steps: resting card, hovered or dragged card, floating layer */
+  --color-encourage: var(--encourage);
+  --color-encourage-foreground: var(--encourage-foreground);
+  /* Elevation steps: flat card (hairline only), lifted (hover or drag), floating layer */
   --shadow-card: var(--shadow-card);
   --shadow-raised: var(--shadow-raised);
   --shadow-pop: var(--shadow-pop);
@@ -58,37 +61,41 @@
 }
 
 :root {
-  /* Warm paper, green-black ink, one strong accent: electric lime (--brand) */
-  --background: oklch(0.975 0.008 95);
-  --foreground: oklch(0.21 0.02 165);
-  --card: oklch(0.995 0.004 95);
-  --card-foreground: oklch(0.21 0.02 165);
-  --popover: oklch(0.995 0.004 95);
-  --popover-foreground: oklch(0.21 0.02 165);
-  --primary: oklch(0.25 0.035 165);
-  --primary-foreground: oklch(0.975 0.008 95);
-  --secondary: oklch(0.948 0.01 95);
-  --secondary-foreground: oklch(0.25 0.035 165);
-  --muted: oklch(0.948 0.01 95);
-  --muted-foreground: oklch(0.46 0.02 165);
-  --accent: oklch(0.93 0.08 125);
-  --accent-foreground: oklch(0.27 0.05 150);
-  --destructive: oklch(0.52 0.21 25);
-  --border: oklch(0.895 0.012 95);
-  --input: oklch(0.62 0.015 165);
-  --ring: oklch(0.25 0.035 165);
-  --brand: oklch(0.9 0.2 125);
-  --brand-foreground: oklch(0.21 0.03 165);
-  /* Shadows are tinted with the ink color instead of pure black, so they look soft on paper */
-  --shadow-card: 0 1px 2px oklch(0.21 0.02 165 / 6%), 0 1px 1px oklch(0.21 0.02 165 / 4%);
-  --shadow-raised: 0 10px 24px -8px oklch(0.21 0.02 165 / 16%), 0 2px 6px oklch(0.21 0.02 165 / 6%);
-  --shadow-pop: 0 24px 60px -16px oklch(0.21 0.02 165 / 28%), 0 6px 16px oklch(0.21 0.02 165 / 8%);
+  /* Warm paper, warm charcoal ink, one accent: a deep, calm teal ("tide"). See DESIGN.md */
+  --background: oklch(0.975 0.008 85);
+  --foreground: oklch(0.22 0.012 80);
+  --card: oklch(0.995 0.004 85);
+  --card-foreground: oklch(0.22 0.012 80);
+  --popover: oklch(0.995 0.004 85);
+  --popover-foreground: oklch(0.22 0.012 80);
+  --primary: oklch(0.46 0.085 215);
+  --primary-foreground: oklch(0.99 0.005 85);
+  --secondary: oklch(0.948 0.008 85);
+  --secondary-foreground: oklch(0.22 0.012 80);
+  --muted: oklch(0.948 0.008 85);
+  --muted-foreground: oklch(0.47 0.012 80);
+  --accent: oklch(0.945 0.022 215);
+  --accent-foreground: oklch(0.34 0.07 215);
+  --destructive: oklch(0.52 0.2 25);
+  --border: oklch(0.9 0.01 85);
+  --input: oklch(0.62 0.012 80);
+  --ring: oklch(0.46 0.085 215);
+  /* The brand color is the accent itself. There is no second brand color. */
+  --brand: oklch(0.46 0.085 215);
+  --brand-foreground: oklch(0.99 0.005 85);
+  /* A warm wash for encouraging messages (next step, tip, progress). A surface tint, not a second accent. */
+  --encourage: oklch(0.95 0.045 80);
+  --encourage-foreground: oklch(0.22 0.012 80);
+  /* Elevation: cards are flat with a hairline border. Shadows mean "lifted": hover, drag, floating layers. */
+  --shadow-card: 0 0 0 0 transparent;
+  --shadow-raised: 0 12px 28px -12px oklch(0.22 0.012 80 / 22%), 0 3px 8px -2px oklch(0.22 0.012 80 / 8%);
+  --shadow-pop: 0 28px 64px -20px oklch(0.22 0.012 80 / 32%), 0 8px 20px -6px oklch(0.22 0.012 80 / 10%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.75rem;
+  --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -100,29 +107,31 @@
 }
 
 .dark {
-  --background: oklch(0.17 0.015 165);
-  --foreground: oklch(0.95 0.01 95);
-  --card: oklch(0.215 0.018 165);
-  --card-foreground: oklch(0.95 0.01 95);
-  --popover: oklch(0.235 0.018 165);
-  --popover-foreground: oklch(0.95 0.01 95);
-  --primary: oklch(0.9 0.2 125);
-  --primary-foreground: oklch(0.2 0.03 165);
-  --secondary: oklch(0.26 0.018 165);
-  --secondary-foreground: oklch(0.95 0.01 95);
-  --muted: oklch(0.26 0.018 165);
-  --muted-foreground: oklch(0.73 0.02 150);
-  --accent: oklch(0.3 0.05 140);
-  --accent-foreground: oklch(0.93 0.12 125);
+  --background: oklch(0.18 0.008 80);
+  --foreground: oklch(0.95 0.008 85);
+  --card: oklch(0.225 0.008 80);
+  --card-foreground: oklch(0.95 0.008 85);
+  --popover: oklch(0.245 0.008 80);
+  --popover-foreground: oklch(0.95 0.008 85);
+  --primary: oklch(0.8 0.085 205);
+  --primary-foreground: oklch(0.2 0.03 220);
+  --secondary: oklch(0.27 0.008 80);
+  --secondary-foreground: oklch(0.95 0.008 85);
+  --muted: oklch(0.27 0.008 80);
+  --muted-foreground: oklch(0.74 0.01 85);
+  --accent: oklch(0.3 0.04 215);
+  --accent-foreground: oklch(0.88 0.06 205);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.3 0.015 165);
-  --input: oklch(0.55 0.02 165);
-  --ring: oklch(0.9 0.2 125);
-  --brand: oklch(0.9 0.2 125);
-  --brand-foreground: oklch(0.2 0.03 165);
-  --shadow-card: 0 1px 2px oklch(0 0 0 / 30%);
-  --shadow-raised: 0 10px 24px -8px oklch(0 0 0 / 55%), 0 2px 6px oklch(0 0 0 / 30%);
-  --shadow-pop: 0 24px 60px -16px oklch(0 0 0 / 70%), 0 6px 16px oklch(0 0 0 / 35%);
+  --border: oklch(0.31 0.008 80);
+  --input: oklch(0.56 0.01 80);
+  --ring: oklch(0.8 0.085 205);
+  --brand: oklch(0.8 0.085 205);
+  --brand-foreground: oklch(0.2 0.03 220);
+  --encourage: oklch(0.3 0.04 80);
+  --encourage-foreground: oklch(0.95 0.008 85);
+  --shadow-card: 0 0 0 0 transparent;
+  --shadow-raised: 0 12px 28px -12px oklch(0 0 0 / 60%), 0 3px 8px -2px oklch(0 0 0 / 35%);
+  --shadow-pop: 0 28px 64px -20px oklch(0 0 0 / 75%), 0 8px 20px -6px oklch(0 0 0 / 40%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -151,11 +160,32 @@
   html {
     @apply font-sans;
   }
-  /* Headings use the display font, slightly tightened */
-  h1, h2 {
+  /* Only the page title uses the display font. Headings inside the app stay in the text font,
+     because at small sizes a serif is slower to scan. */
+  h1 {
     font-family: var(--font-display);
     font-optical-sizing: auto;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  h2, h3 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  /* Numbers that change or are compared line up in columns */
+  body {
+    font-variant-numeric: tabular-nums;
+  }
+  /* The parts of the page the browser draws also follow the palette */
+  input, textarea {
+    caret-color: var(--primary);
+  }
+  * {
+    scrollbar-color: color-mix(in oklch, var(--foreground) 28%, transparent) transparent;
+    scrollbar-width: thin;
   }
   /* One clear focus mark for keyboard users on every link, button and control.
      It only shows for keyboard focus (:focus-visible), not after a mouse click. */
@@ -164,8 +194,21 @@
     outline-offset: 2px;
   }
   ::selection {
-    background: var(--brand);
-    color: var(--brand-foreground);
+    background: color-mix(in oklch, var(--primary) 24%, transparent);
+  }
+  /* Touch screens and phones: every control is at least 44px tall, the size a fingertip needs */
+  @media (pointer: coarse), (max-width: 640px) {
+    [data-slot='button']:not([data-size='xs']):not([data-size='icon-xs']),
+    [data-slot='select-trigger'],
+    [data-slot='input'] {
+      min-height: 2.75rem;
+    }
+    [data-slot='button'][data-size^='icon'] {
+      min-width: 2.75rem;
+    }
+    [data-slot='tabs-list'] {
+      height: 2.75rem;
+    }
   }
 }
 
@@ -176,7 +219,7 @@
 }
 
 .animated-gradient {
-  background: linear-gradient(125deg, oklch(0.2 0.03 165), oklch(0.3 0.07 150), oklch(0.24 0.04 190), oklch(0.19 0.03 165));
+  background: linear-gradient(125deg, oklch(0.3 0.06 220), oklch(0.4 0.08 210), oklch(0.34 0.07 195), oklch(0.27 0.05 230));
   background-size: 300% 300%;
   animation: gradient-drift 18s ease-in-out infinite;
 }

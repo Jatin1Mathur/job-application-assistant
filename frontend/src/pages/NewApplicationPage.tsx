@@ -11,6 +11,7 @@ import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Label } from '../components/ui/label.tsx'
 import { Textarea } from '../components/ui/textarea.tsx'
+import { usePageTitle } from '../lib/usePageTitle.ts'
 
 const MIN_DESCRIPTION_LENGTH = 100
 
@@ -21,6 +22,7 @@ export default function NewApplicationPage() {
   const [jobDescription, setJobDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  usePageTitle('New application')
 
   const descriptionLength = jobDescription.trim().length
   const progress = Math.min(100, (descriptionLength / MIN_DESCRIPTION_LENGTH) * 100)
@@ -31,7 +33,7 @@ export default function NewApplicationPage() {
     setSaving(true)
     try {
       const application = await api.createApplication({ companyName, jobTitle, jobDescription })
-      toast.success('Application created')
+      toast.success('Application added')
       navigate(`/applications/${application.id}`)
     } catch (err) {
       setError(errorMessage(err))
@@ -44,10 +46,10 @@ export default function NewApplicationPage() {
       <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Back to applications
       </Link>
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">New application</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Paste the job posting. The AI compares it with your resume.</p>
+      <h1 className="mt-3 text-2xl font-semibold sm:text-3xl">New application</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Paste the job posting. It will be compared with your resume.</p>
 
-      <form onSubmit={submit} className="mt-6 space-y-5 rounded-2xl border bg-card p-6 shadow-card sm:p-8">
+      <form onSubmit={submit} className="mt-6 space-y-5 rounded-xl border bg-card p-6 sm:p-8">
         {error && <ErrorAlert message={error} />}
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -101,7 +103,7 @@ export default function NewApplicationPage() {
           </Button>
           <MotionButton type="submit" size="lg" disabled={saving}>
             {saving && <Loader2 className="animate-spin" />}
-            Create application
+            Add application
           </MotionButton>
         </div>
       </form>
