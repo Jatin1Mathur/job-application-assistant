@@ -1,5 +1,8 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.entity.ResumeFile;
+import com.jatin.jobassistant.repository.ResumeFileRepository;
+import org.mockito.Spy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +43,12 @@ class ResumeServiceTest {
 
 	@Mock
 	private ResumeRepository resumeRepository;
+
+	@Mock
+	private ResumeFileRepository resumeFileRepository;
+
+	@Spy
+	private SkillCatalog skillCatalog = new SkillCatalog();
 
 	@InjectMocks
 	private ResumeService resumeService;
@@ -212,6 +221,53 @@ class ResumeServiceTest {
 			document.save(out);
 			return out.toByteArray();
 		}
+	}
+
+	@Test
+	void uploadKeepsThePdfItselfAndFindsTheSkillsInItsText() throws IOException {
+		savingAssignsIdAndCreatedAt();
+		byte[] pdf = pdfWithText("Backend developer: Java, Spring Boot and Docker");
+
+		ResumeUploadResponse response = resumeService.upload(USER_ID, pdfFile("resume.pdf", pdf));
+
+		assertThat(response.detectedSkills()).containsExactly("Java", "Spring Boot", "Docker");
+		assertThat(response.hasFile()).isTrue();
+		ArgumentCaptor<ResumeFile> stored = ArgumentCaptor.forClass(ResumeFile.class);
+		verify(resumeFileRepository).save(stored.capture());
+		assertThat(stored.getValue().getResumeId()).isEqualTo(1L);
+		assertThat(stored.getValue().getData()).isEqualTo(pdf);
+	}
+
+	@Test
+	void getFileReturnsTheStoredPdfOfTheOwner() {
+		Resume resume = new Resume();
+		resume.setId(5L);
+		resume.setFileName("resume.pdf");
+		when(resumeRepository.findByIdAndUserId(5L, USER_ID)).thenReturn(Optional.of(resume));
+		when(resumeFileRepository.findById(5L)).thenReturn(Optional.of(new ResumeFile(5L, new byte[] { 1, 2, 3 })));
+
+		ResumeService.ResumeFileContent file = resumeService.getFile(USER_ID, 5L);
+
+		assertThat(file.fileName()).isEqualTo("resume.pdf");
+		assertThat(file.data()).containsExactly(1, 2, 3);
+	}
+
+	@Test
+	void getFileOfAnotherUserIsNotFoundAndTheFileIsNeverLoaded() {
+		when(resumeRepository.findByIdAndUserId(5L, OTHER_USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> resumeService.getFile(OTHER_USER_ID, 5L)).isInstanceOf(ResumeNotFoundException.class);
+		verify(resumeFileRepository, never()).findById(any());
+	}
+
+	@Test
+	void getFileIsNotFoundForAResumeUploadedBeforeFilesWereStored() {
+		Resume resume = new Resume();
+		resume.setId(5L);
+		when(resumeRepository.findByIdAndUserId(5L, USER_ID)).thenReturn(Optional.of(resume));
+		when(resumeFileRepository.findById(5L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> resumeService.getFile(USER_ID, 5L)).isInstanceOf(ResumeNotFoundException.class);
 	}
 
 }

@@ -16,17 +16,32 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { STATUSES } from '../api.ts'
 import type { Application, ApplicationStatus } from '../api.ts'
-import { scoreTone } from '../lib/format.ts'
+import { daysSince, formatDate, scoreTone } from '../lib/format.ts'
 import { statusLabel } from '../lib/status.ts'
 import AnimatedNumber from './AnimatedNumber.tsx'
 import { StatusDot } from './StatusBadge.tsx'
+
+// How long the application has had its current status. A card that has not moved for a while stands out a little.
+function StageAge({ since }: { since: string }) {
+  const days = daysSince(since)
+  return (
+    <span
+      className={`rounded-md px-1.5 py-0.5 font-medium tabular-nums ${days > 7 ? 'bg-encourage text-encourage-foreground' : 'bg-muted text-muted-foreground'}`}
+      title={`In this stage since ${formatDate(since)}`}
+      data-testid="stage-age"
+    >
+      <span className="sr-only">In this stage: </span>
+      {days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`}
+    </span>
+  )
+}
 
 function CardBody({ application }: { application: Application }) {
   return (
     <>
       <p className="line-clamp-2 text-sm font-semibold leading-snug">{application.jobTitle}</p>
       <p className="mt-0.5 truncate text-xs text-muted-foreground">{application.companyName}</p>
-      <p className="mt-2 text-xs">
+      <p className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
         {application.matchScore === null ? (
           <span className="text-muted-foreground">Not analyzed</span>
         ) : (
@@ -35,6 +50,7 @@ function CardBody({ application }: { application: Application }) {
             <span className="font-normal text-muted-foreground"> / 100 match</span>
           </span>
         )}
+        <StageAge since={application.statusChangedAt} />
       </p>
     </>
   )

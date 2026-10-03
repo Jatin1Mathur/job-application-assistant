@@ -35,6 +35,10 @@ public class Resume {
 	@Column(columnDefinition = "text")
 	private String extractedText;
 
+	// True if the uploaded PDF itself is stored (see ResumeFile). Resumes uploaded before that existed have only text
+	@Column(nullable = false)
+	private boolean hasFile;
+
 	@CreationTimestamp
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;

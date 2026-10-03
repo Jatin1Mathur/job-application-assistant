@@ -1,5 +1,12 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.dto.UpdateDetailsRequest;
+import com.jatin.jobassistant.entity.StatusHistory;
+import com.jatin.jobassistant.repository.StatusHistoryRepository;
+import com.jatin.jobassistant.entity.CoverLetterTone;
+import org.mockito.Spy;
+import java.time.ZoneOffset;
+import java.time.Clock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +48,8 @@ import com.jatin.jobassistant.repository.ResumeRepository;
 @ExtendWith(MockitoExtension.class)
 class JobApplicationServiceTest {
 
+	private static final Instant NOW = Instant.parse("2026-10-03T10:00:00Z");
+
 	private static final Long USER_ID = 1L;
 
 	private static final Long OTHER_USER_ID = 2L;
@@ -61,6 +70,15 @@ class JobApplicationServiceTest {
 
 	@Mock
 	private MatchAnalysisRepository matchAnalysisRepository;
+
+	@Mock
+	private StatusHistoryRepository statusHistoryRepository;
+
+	@Mock
+	private PdfTextWriter pdfTextWriter;
+
+	@Spy
+	private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
 	@InjectMocks
 	private JobApplicationService jobApplicationService;
@@ -452,7 +470,7 @@ class JobApplicationServiceTest {
 		application.setJobDescription(JOB_DESCRIPTION);
 		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
 		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
-		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", JOB_DESCRIPTION))
+		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", JOB_DESCRIPTION, CoverLetterTone.FORMAL))
 			.thenReturn("Dear Hiring Manager, ...");
 
 		CoverLetterResponse response = jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L);
@@ -489,7 +507,7 @@ class JobApplicationServiceTest {
 		application.setJobDescription(JOB_DESCRIPTION);
 		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
 		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
-		when(aiService.generateCoverLetter(any(), any(), any(), any())).thenThrow(new AiTimeoutException("slow", null));
+		when(aiService.generateCoverLetter(any(), any(), any(), any(), any())).thenThrow(new AiTimeoutException("slow", null));
 
 		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L))
 			.isInstanceOf(AiTimeoutException.class);
@@ -514,6 +532,148 @@ class JobApplicationServiceTest {
 		application.setCreatedAt(Instant.now());
 		application.setUpdatedAt(Instant.now());
 		return application;
+	}
+
+	@Test
+	void createRecordsTheFirstLineOfTheStatusHistory() {
+		when(jobApplicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> {
+			JobApplication saved = invocation.getArgument(0);
+			saved.setId(1L);
+			return saved;
+		});
+
+		ApplicationResponse response = jobApplicationService
+			.create(USER_ID, new CreateApplicationRequest("Acme", "Java Developer", JOB_DESCRIPTION));
+
+		ArgumentCaptor<StatusHistory> recorded = ArgumentCaptor.forClass(StatusHistory.class);
+		verify(statusHistoryRepository).save(recorded.capture());
+		assertThat(recorded.getValue().getApplicationId()).isEqualTo(1L);
+		assertThat(recorded.getValue().getFromStatus()).isNull();
+		assertThat(recorded.getValue().getToStatus()).isEqualTo(ApplicationStatus.SAVED);
+		assertThat(recorded.getValue().getChangedAt()).isEqualTo(NOW);
+		assertThat(response.statusChangedAt()).isEqualTo(NOW);
+		assertThat(response.statusHistory()).hasSize(1);
+	}
+
+	@Test
+	void updateStatusRecordsTheChangeWithItsDate() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setStatusChangedAt(NOW.minusSeconds(86_400));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+
+		ApplicationResponse response = jobApplicationService.updateStatus(USER_ID, 7L, ApplicationStatus.APPLIED);
+
+		ArgumentCaptor<StatusHistory> recorded = ArgumentCaptor.forClass(StatusHistory.class);
+		verify(statusHistoryRepository).save(recorded.capture());
+		assertThat(recorded.getValue().getFromStatus()).isEqualTo(ApplicationStatus.SAVED);
+		assertThat(recorded.getValue().getToStatus()).isEqualTo(ApplicationStatus.APPLIED);
+		assertThat(recorded.getValue().getChangedAt()).isEqualTo(NOW);
+		// "Days in this stage" starts again
+		assertThat(response.statusChangedAt()).isEqualTo(NOW);
+	}
+
+	@Test
+	void updateStatusToTheSameStatusRecordsNothing() {
+		JobApplication application = application(7L, ApplicationStatus.APPLIED);
+		Instant since = NOW.minusSeconds(5 * 86_400);
+		application.setStatusChangedAt(since);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+
+		ApplicationResponse response = jobApplicationService.updateStatus(USER_ID, 7L, ApplicationStatus.APPLIED);
+
+		verify(statusHistoryRepository, never()).save(any());
+		verify(jobApplicationRepository, never()).save(any());
+		assertThat(response.statusChangedAt()).isEqualTo(since);
+	}
+
+	@Test
+	void getByIdReturnsTheStatusHistoryOldestFirst() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.APPLIED)));
+		when(statusHistoryRepository.findByApplicationIdOrderByChangedAtAscIdAsc(7L)).thenReturn(List.of(
+				new StatusHistory(7L, null, ApplicationStatus.SAVED, NOW.minusSeconds(200)),
+				new StatusHistory(7L, ApplicationStatus.SAVED, ApplicationStatus.APPLIED, NOW.minusSeconds(100))));
+
+		ApplicationResponse response = jobApplicationService.getById(USER_ID, 7L);
+
+		assertThat(response.statusHistory()).extracting(change -> change.toStatus())
+			.containsExactly(ApplicationStatus.SAVED, ApplicationStatus.APPLIED);
+	}
+
+	@Test
+	void updateDetailsStoresNotesAndInterviewDate() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.INTERVIEW)));
+		when(jobApplicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		Instant interview = Instant.parse("2026-10-06T09:00:00Z");
+
+		ApplicationResponse response = jobApplicationService.updateDetails(USER_ID, 7L,
+				new UpdateDetailsRequest("  Ask about the team.  ", interview));
+
+		assertThat(response.notes()).isEqualTo("Ask about the team.");
+		assertThat(response.interviewAt()).isEqualTo(interview);
+		// Notes and dates are not a status change
+		verify(statusHistoryRepository, never()).save(any());
+	}
+
+	@Test
+	void updateDetailsWithEmptyValuesRemovesNotesAndInterviewDate() {
+		JobApplication application = application(7L, ApplicationStatus.INTERVIEW);
+		application.setNotes("old");
+		application.setInterviewAt(NOW);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(jobApplicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		ApplicationResponse response = jobApplicationService.updateDetails(USER_ID, 7L, new UpdateDetailsRequest("   ", null));
+
+		assertThat(response.notes()).isNull();
+		assertThat(response.interviewAt()).isNull();
+	}
+
+	@Test
+	void updateDetailsOfAnotherUsersApplicationIsNotFound() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, OTHER_USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> jobApplicationService.updateDetails(OTHER_USER_ID, 7L, new UpdateDetailsRequest("x", null)))
+			.isInstanceOf(ApplicationNotFoundException.class);
+	}
+
+	@Test
+	void generateCoverLetterPassesTheToneToTheAiAndRemembersIt() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", JOB_DESCRIPTION, CoverLetterTone.SHORT))
+			.thenReturn("A short letter.");
+
+		CoverLetterResponse response = jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L, CoverLetterTone.SHORT);
+
+		assertThat(response.coverLetter()).isEqualTo("A short letter.");
+		assertThat(response.tone()).isEqualTo(CoverLetterTone.SHORT);
+		assertThat(application.getCoverLetterTone()).isEqualTo(CoverLetterTone.SHORT);
+	}
+
+	@Test
+	void coverLetterPdfContainsTheStoredLetterAndHasASafeFileName() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setCompanyName("Müller & Söhne GmbH");
+		application.setCoverLetter("Dear Hiring Manager, ...");
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(pdfTextWriter.write(any(), any())).thenReturn(new byte[] { 1, 2, 3 });
+
+		JobApplicationService.CoverLetterPdf pdf = jobApplicationService.coverLetterPdf(USER_ID, 7L);
+
+		assertThat(pdf.content()).containsExactly(1, 2, 3);
+		assertThat(pdf.fileName()).isEqualTo("cover-letter-m-ller-s-hne-gmbh.pdf");
+		verify(pdfTextWriter).write("Cover letter - Developer at Müller & Söhne GmbH", "Dear Hiring Manager, ...");
+	}
+
+	@Test
+	void coverLetterPdfIsRefusedWhenThereIsNoLetterYet() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+
+		assertThatThrownBy(() -> jobApplicationService.coverLetterPdf(USER_ID, 7L))
+			.isInstanceOf(InvalidAnalysisRequestException.class)
+			.hasMessageContaining("no cover letter yet");
 	}
 
 }

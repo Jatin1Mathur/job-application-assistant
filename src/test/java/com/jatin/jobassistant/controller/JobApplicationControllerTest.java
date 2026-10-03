@@ -1,5 +1,11 @@
 package com.jatin.jobassistant.controller;
 
+import com.jatin.jobassistant.service.InvalidAnalysisRequestException;
+import com.jatin.jobassistant.dto.StatusChangeResponse;
+import com.jatin.jobassistant.dto.UpdateDetailsRequest;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import com.jatin.jobassistant.entity.CoverLetterTone;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -204,7 +210,7 @@ class JobApplicationControllerTest {
 				List.of("tip 1", "tip 2", "tip 3"), "llama3.2", Instant.parse("2026-10-03T10:00:00Z"), 2L);
 		when(jobApplicationService.getById(USER_ID, 1L)).thenReturn(new ApplicationResponse(1L, "Acme",
 				"Java Developer", JOB_DESCRIPTION, ApplicationStatus.SAVED, 80, null, Instant.now(), Instant.now(),
-				analysis));
+				analysis, null, null, Instant.now(), null, List.of()));
 
 		mockMvc.perform(get("/api/applications/1").header("Authorization", token))
 			.andExpect(status().isOk())
@@ -402,8 +408,8 @@ class JobApplicationControllerTest {
 
 	@Test
 	void coverLetterReturnsTheLetter() throws Exception {
-		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L))
-			.thenReturn(new CoverLetterResponse(1L, "Dear Hiring Manager, ..."));
+		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L, CoverLetterTone.FORMAL))
+			.thenReturn(new CoverLetterResponse(1L, "Dear Hiring Manager, ...", CoverLetterTone.FORMAL));
 
 		mockMvc.perform(post("/api/applications/1/cover-letter").header("Authorization", token).param("resumeId", "2"))
 			.andExpect(status().isOk())
@@ -420,7 +426,7 @@ class JobApplicationControllerTest {
 
 	@Test
 	void coverLetterReturns503WhenTheAiIsNotRunning() throws Exception {
-		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L))
+		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L, CoverLetterTone.FORMAL))
 			.thenThrow(new AiUnavailableException("AI is not running", null));
 
 		mockMvc.perform(post("/api/applications/1/cover-letter").header("Authorization", token).param("resumeId", "2"))
@@ -430,7 +436,7 @@ class JobApplicationControllerTest {
 
 	@Test
 	void coverLetterReturns502WhenTheAiAnswerIsNotValid() throws Exception {
-		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L))
+		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L, CoverLetterTone.FORMAL))
 			.thenThrow(new InvalidAiResponseException("too long", null));
 
 		mockMvc.perform(post("/api/applications/1/cover-letter").header("Authorization", token).param("resumeId", "2"))
@@ -442,7 +448,106 @@ class JobApplicationControllerTest {
 
 	private ApplicationResponse response(Long id, ApplicationStatus status) {
 		return new ApplicationResponse(id, "Acme", "Java Developer", "Build APIs", status, null, null, Instant.now(),
-				Instant.now(), null);
+				Instant.now(), null, null, null, Instant.now(), null, List.of());
+	}
+
+	@Test
+	void coverLetterAcceptsAToneInAnySpelling() throws Exception {
+		when(jobApplicationService.generateCoverLetter(USER_ID, 1L, 2L, CoverLetterTone.FRIENDLY))
+			.thenReturn(new CoverLetterResponse(1L, "Hi there, ...", CoverLetterTone.FRIENDLY));
+
+		mockMvc
+			.perform(post("/api/applications/1/cover-letter").header("Authorization", token)
+				.param("resumeId", "2")
+				.param("tone", "friendly"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.tone").value("FRIENDLY"))
+			.andExpect(jsonPath("$.coverLetter").value("Hi there, ..."));
+	}
+
+	@Test
+	void coverLetterRejectsAnUnknownToneAndNamesTheAllowedOnes() throws Exception {
+		mockMvc
+			.perform(post("/api/applications/1/cover-letter").header("Authorization", token)
+				.param("resumeId", "2")
+				.param("tone", "angry"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value(containsString("FORMAL, FRIENDLY, SHORT")));
+	}
+
+	@Test
+	void coverLetterPdfIsADownloadWithAFileName() throws Exception {
+		when(jobApplicationService.coverLetterPdf(USER_ID, 1L))
+			.thenReturn(new JobApplicationService.CoverLetterPdf("cover-letter-acme.pdf", "%PDF-1.6 test".getBytes()));
+
+		mockMvc.perform(get("/api/applications/1/cover-letter.pdf").header("Authorization", token))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Content-Type", "application/pdf"))
+			.andExpect(header().string("Content-Disposition", "attachment; filename=\"cover-letter-acme.pdf\""))
+			.andExpect(content().bytes("%PDF-1.6 test".getBytes()));
+	}
+
+	@Test
+	void coverLetterPdfNeedsALogin() throws Exception {
+		mockMvc.perform(get("/api/applications/1/cover-letter.pdf")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void coverLetterPdfReturns400WhenThereIsNoLetter() throws Exception {
+		when(jobApplicationService.coverLetterPdf(USER_ID, 1L))
+			.thenThrow(new InvalidAnalysisRequestException("This application has no cover letter yet. Generate one first"));
+
+		mockMvc.perform(get("/api/applications/1/cover-letter.pdf").header("Authorization", token))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value(containsString("no cover letter yet")));
+	}
+
+	@Test
+	void updateDetailsStoresNotesAndInterviewDate() throws Exception {
+		Instant interview = Instant.parse("2026-10-06T09:00:00Z");
+		when(jobApplicationService.updateDetails(USER_ID, 1L, new UpdateDetailsRequest("Ask about the team", interview)))
+			.thenReturn(new ApplicationResponse(1L, "Acme", "Java Developer", "Build APIs", ApplicationStatus.INTERVIEW,
+					null, null, Instant.now(), Instant.now(), null, "Ask about the team", interview, Instant.now(), null,
+					List.of(new StatusChangeResponse(null, ApplicationStatus.SAVED, Instant.parse("2026-10-01T09:00:00Z")))));
+
+		mockMvc
+			.perform(patch("/api/applications/1/details").header("Authorization", token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"notes": "Ask about the team", "interviewAt": "2026-10-06T09:00:00Z"}
+						"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.notes").value("Ask about the team"))
+			.andExpect(jsonPath("$.interviewAt").value("2026-10-06T09:00:00Z"))
+			.andExpect(jsonPath("$.statusHistory[0].toStatus").value("SAVED"))
+			.andExpect(jsonPath("$.statusHistory[0].fromStatus").doesNotExist());
+	}
+
+	@Test
+	void updateDetailsRejectsNotesThatAreTooLong() throws Exception {
+		mockMvc
+			.perform(patch("/api/applications/1/details").header("Authorization", token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"notes\": \"" + "x".repeat(5001) + "\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value(containsString("notes must be at most 5000 characters")));
+	}
+
+	@Test
+	void updateDetailsRejectsADateThatIsNotADate() throws Exception {
+		mockMvc
+			.perform(patch("/api/applications/1/details").header("Authorization", token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"interviewAt": "next tuesday"}
+						"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void updateDetailsNeedsALogin() throws Exception {
+		mockMvc.perform(patch("/api/applications/1/details").contentType(MediaType.APPLICATION_JSON).content("{}"))
+			.andExpect(status().isUnauthorized());
 	}
 
 }

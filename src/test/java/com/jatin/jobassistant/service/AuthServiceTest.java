@@ -180,4 +180,39 @@ class AuthServiceTest {
 			.hasMessage("Email or password is incorrect");
 	}
 
+	@Test
+	void registerStoresTheOptionalNameWithoutSpacesAround() {
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		authService.register(new RegisterRequest("jatin@example.com", "secret-password", "  Jatin  "));
+
+		ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+		verify(userRepository).save(saved.capture());
+		assertThat(saved.getValue().getName()).isEqualTo("Jatin");
+	}
+
+	@Test
+	void updateNameSetsAndRemovesTheName() {
+		User user = new User();
+		user.setId(1L);
+		user.setEmail("jatin@example.com");
+		when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		assertThat(authService.updateName(1L, " Jatin ").name()).isEqualTo("Jatin");
+		assertThat(authService.updateName(1L, "   ").name()).isNull();
+	}
+
+	@Test
+	void theDemoAccountKeepsItsName() {
+		User demo = new User();
+		demo.setId(7L);
+		demo.setName("Alex");
+		demo.setDemo(true);
+		when(userRepository.findById(7L)).thenReturn(Optional.of(demo));
+
+		assertThatThrownBy(() -> authService.updateName(7L, "Someone")).isInstanceOf(DemoAccountLockedException.class);
+		assertThat(demo.getName()).isEqualTo("Alex");
+	}
+
 }

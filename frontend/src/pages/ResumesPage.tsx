@@ -1,15 +1,18 @@
-import { Check, FileText, FileUp, Loader2 } from 'lucide-react'
+import { FileUp, Loader2 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { toast } from 'sonner'
 import { api, errorMessage } from '../api.ts'
-import type { ResumeSummary } from '../api.ts'
+import type { Insights, ResumeSummary } from '../api.ts'
+import { DocumentStackArt } from '../components/illustrations.tsx'
+import ResumeCompare from '../components/resumes/ResumeCompare.tsx'
+import ResumeThumbnail from '../components/resumes/ResumeThumbnail.tsx'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import PageTransition from '../components/PageTransition.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
-import { formatDate } from '../lib/format.ts'
+import { formatDate, scoreTone } from '../lib/format.ts'
 import { staggerItem, staggerList } from '../lib/motion.ts'
 import { usePageTitle } from '../lib/usePageTitle.ts'
 
@@ -18,6 +21,10 @@ export default function ResumesPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  // The average match score of each resume (from the insights). Missing while loading or if nothing was analyzed.
+  const [scores, setScores] = useState<Insights['scoreByResume']>([])
+  // The ids of the (at most two) resumes ticked for comparison
+  const [compared, setCompared] = useState<number[]>([])
   const fileInput = useRef<HTMLInputElement>(null)
   usePageTitle('Resumes')
 
@@ -26,7 +33,18 @@ export default function ResumesPage() {
       .listResumes()
       .then(setResumes)
       .catch((err) => setLoadError(errorMessage(err)))
+    api
+      .getInsights()
+      .then((insights) => setScores(insights.scoreByResume))
+      .catch(() => setScores([]))
   }, [])
+
+  // Ticking a third resume replaces the one that was ticked first
+  function toggleCompare(id: number) {
+    setCompared((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id].slice(-2)))
+  }
+
+  const pair = compared.map((id) => resumes?.find((resume) => resume.id === id)).filter((resume): resume is ResumeSummary => Boolean(resume))
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -101,33 +119,63 @@ export default function ResumesPage() {
           </div>
         ) : resumes.length === 0 ? (
           <EmptyState
-            icon={FileText}
+            art={<DocumentStackArt />}
             title="No resumes yet"
             description="Upload your resume above. It is the first step: every match score and cover letter starts from it."
           />
         ) : (
-          <motion.ul variants={staggerList} initial="hidden" animate="show" className="space-y-3">
-            {resumes.map((resume) => (
-              <motion.li
-                key={resume.id}
-                layout
-                variants={staggerItem}
-                className="flex items-start gap-4 rounded-xl border bg-card p-5"
-              >
-                <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <FileText className="size-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{resume.fileName}</p>
-                  <p className="text-xs text-muted-foreground">Uploaded {formatDate(resume.createdAt)}</p>
-                  {/* The first lines of a resume are name, email and phone number, so they are not repeated on screen */}
-                  <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Check className="size-4 text-emerald-600 dark:text-emerald-400" /> Text read and ready to compare
-                  </p>
-                </div>
-              </motion.li>
-            ))}
-          </motion.ul>
+          <>
+            {pair.length === 2 && (
+              <div className="mb-4">
+                <ResumeCompare first={pair[0]} second={pair[1]} scores={scores} onClose={() => setCompared([])} />
+              </div>
+            )}
+            {resumes.length > 1 && pair.length < 2 && (
+              <p className="mb-3 text-sm text-muted-foreground" data-testid="compare-hint">
+                Tick two resumes to compare them.{compared.length === 1 ? ' One more.' : ''}
+              </p>
+            )}
+            <motion.ul variants={staggerList} initial="hidden" animate="show" className="space-y-3">
+              {resumes.map((resume) => {
+                const score = scores.find((item) => item.resumeId === resume.id)
+                return (
+                  <motion.li key={resume.id} layout variants={staggerItem} className="flex items-start gap-4 rounded-xl border bg-card p-4 sm:p-5" data-testid={`resume-${resume.id}`}>
+                    <ResumeThumbnail resume={resume} width={72} />
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-semibold">{resume.fileName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Uploaded {formatDate(resume.createdAt)}
+                        {score && (
+                          <>
+                            . Average match <span className={`font-semibold ${scoreTone(score.averageScore).text}`}>{score.averageScore}</span> from {score.analyses}{' '}
+                            {score.analyses === 1 ? 'analysis' : 'analyses'}
+                          </>
+                        )}
+                      </p>
+                      {/* The skills found in the text. The first lines of a resume (name, email, phone) are never shown. */}
+                      {resume.detectedSkills.length === 0 ? (
+                        <p className="mt-2 text-sm text-muted-foreground">Text read and ready to compare. No well-known skill names were found in it.</p>
+                      ) : (
+                        <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label={`Skills found in ${resume.fileName}`}>
+                          {resume.detectedSkills.map((skill) => (
+                            <li key={skill} className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                              {skill}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {resumes.length > 1 && (
+                        <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium sm:min-h-0">
+                          <input type="checkbox" className="size-4 accent-(--primary)" checked={compared.includes(resume.id)} onChange={() => toggleCompare(resume.id)} />
+                          Compare
+                        </label>
+                      )}
+                    </div>
+                  </motion.li>
+                )
+              })}
+            </motion.ul>
+          </>
         )}
       </div>
     </PageTransition>

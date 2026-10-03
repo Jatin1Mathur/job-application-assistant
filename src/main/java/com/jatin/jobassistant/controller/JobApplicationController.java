@@ -1,5 +1,10 @@
 package com.jatin.jobassistant.controller;
 
+import com.jatin.jobassistant.service.JobApplicationService.CoverLetterPdf;
+import com.jatin.jobassistant.entity.CoverLetterTone;
+import com.jatin.jobassistant.dto.UpdateDetailsRequest;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -77,8 +82,25 @@ public class JobApplicationController {
 	// Asks the AI to write a cover letter from the resume and stores it on the application
 	@PostMapping("/{id}/cover-letter")
 	public CoverLetterResponse generateCoverLetter(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
-			@RequestParam Long resumeId) {
-		return jobApplicationService.generateCoverLetter(CurrentUser.id(jwt), id, resumeId);
+			@RequestParam Long resumeId, @RequestParam(defaultValue = "FORMAL") CoverLetterTone tone) {
+		return jobApplicationService.generateCoverLetter(CurrentUser.id(jwt), id, resumeId, tone);
+	}
+
+	// The stored cover letter as a PDF download
+	@GetMapping(value = "/{id}/cover-letter.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+	public ResponseEntity<byte[]> coverLetterPdf(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+		CoverLetterPdf pdf = jobApplicationService.coverLetterPdf(CurrentUser.id(jwt), id);
+		return ResponseEntity.ok()
+			.header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + pdf.fileName() + "\"")
+			.contentType(MediaType.APPLICATION_PDF)
+			.body(pdf.content());
+	}
+
+	// Notes and the interview date
+	@PatchMapping("/{id}/details")
+	public ApplicationResponse updateDetails(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+			@Valid @RequestBody UpdateDetailsRequest request) {
+		return jobApplicationService.updateDetails(CurrentUser.id(jwt), id, request);
 	}
 
 	@DeleteMapping("/{id}")

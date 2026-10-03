@@ -1,5 +1,6 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.entity.CoverLetterTone;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -193,6 +194,27 @@ class OllamaAiServiceTest {
 	// Wraps the model's text the way Ollama does: {"message": {"content": "<text>"}}
 	private String ollamaReply(String content) {
 		return jsonMapper.writeValueAsString(Map.of("message", Map.of("role", "assistant", "content", content)));
+	}
+
+	@Test
+	void theToneChangesTheRulesInThePrompt() {
+		assertThat(OllamaAiService.toneRules(CoverLetterTone.FORMAL)).contains("Formal").contains("250 words");
+		assertThat(OllamaAiService.toneRules(CoverLetterTone.FRIENDLY)).contains("friendly").contains("250 words");
+		assertThat(OllamaAiService.toneRules(CoverLetterTone.SHORT)).contains("120 words");
+	}
+
+	@Test
+	void generateCoverLetterSendsTheToneRulesAndKeepsTheHonestyRule() {
+		ollama.expect(requestTo(CHAT_URL))
+			.andExpect(jsonPath("$.messages[0].content",
+					Matchers.allOf(Matchers.containsString("At most 120 words"), Matchers.containsString("Never invent experience"))))
+			// Above 0, so "regenerate" gives new wording
+			.andExpect(jsonPath("$.options.temperature").value(0.6))
+			.andRespond(withSuccess(ollamaReply("Dear Hiring Manager, short."), MediaType.APPLICATION_JSON));
+
+		aiService.generateCoverLetter("I know Java", "Java Developer", "TechNova", "Spring Boot role", CoverLetterTone.SHORT);
+
+		ollama.verify();
 	}
 
 }

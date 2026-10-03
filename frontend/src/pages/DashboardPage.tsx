@@ -1,10 +1,17 @@
 import { ChevronLeft, ChevronRight, Columns3, LayoutGrid, Plus, SearchX } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, errorMessage, STATUSES } from '../api.ts'
-import type { Application, ApplicationStatus, Page } from '../api.ts'
+import type { Application, ApplicationStatus, Dashboard, Page } from '../api.ts'
+import { useAuth } from '../auth.tsx'
+import ActivityHeatmap from '../components/dashboard/ActivityHeatmap.tsx'
+import NextActions from '../components/dashboard/NextActions.tsx'
+import StatCards from '../components/dashboard/StatCards.tsx'
+import { PaperPlaneArt } from '../components/illustrations.tsx'
+import { Input } from '../components/ui/input.tsx'
 import AnimatedNumber from '../components/AnimatedNumber.tsx'
 import AnimatedTabsList from '../components/AnimatedTabsList.tsx'
 import EmptyState from '../components/EmptyState.tsx'
@@ -33,6 +40,54 @@ const VIEW_KEY = 'job-assistant.view'
 
 type Filter = ApplicationStatus | 'ALL'
 type View = 'list' | 'board'
+
+// "Good morning", "Good afternoon" or "Good evening", from the clock of the device
+function greeting(): string {
+  const hour = new Date().getHours()
+  if (hour >= 5 && hour < 12) return 'Good morning'
+  if (hour >= 12 && hour < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+// The greeting has the user's name in it. Someone who has not given a name can add it right here.
+function AddName({ onSaved }: { onSaved: (name: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    if (!name.trim()) return
+    setSaving(true)
+    try {
+      const account = await api.updateName(name)
+      if (account.name) onSaved(account.name)
+    } catch (err) {
+      toast.error('The name was not saved', { description: errorMessage(err) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="rounded text-sm font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
+        Add your name
+      </button>
+    )
+  }
+  return (
+    <form onSubmit={save} className="flex items-center gap-2">
+      <label htmlFor="greeting-name" className="sr-only">
+        Your first name
+      </label>
+      <Input id="greeting-name" autoFocus autoComplete="given-name" maxLength={100} placeholder="Your first name" value={name} onChange={(event) => setName(event.target.value)} className="h-9 w-44" />
+      <Button type="submit" size="lg" disabled={saving || !name.trim()}>
+        Save
+      </Button>
+    </form>
+  )
+}
 
 function CardSkeleton() {
   return (
@@ -90,6 +145,18 @@ export default function DashboardPage() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   // How many applications each status has, shown inside the filter tabs
   const [counts, setCounts] = useState<Record<ApplicationStatus, number> | null>(null)
+  // The numbers above the list: stat cards, next actions, activity
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null)
+  const { isDemo } = useAuth()
+
+  const loadDashboard = useCallback(() => {
+    api
+      .getDashboard()
+      .then(setDashboard)
+      .catch(() => setDashboard(null))
+  }, [])
+
+  useEffect(loadDashboard, [loadDashboard])
   usePageTitle('Applications')
 
   const isBoard = view === 'board'
@@ -147,7 +214,10 @@ export default function DashboardPage() {
         (current) =>
           current && {
             ...current,
-            content: current.content.map((item) => (item.id === application.id ? { ...item, status: next } : item)),
+            // A new status also starts "days in this stage" again
+            content: current.content.map((item) =>
+              item.id === application.id ? { ...item, status: next, statusChangedAt: next === previous ? application.statusChangedAt : new Date().toISOString() } : item,
+            ),
           },
       )
     const previous = application.status
@@ -159,6 +229,8 @@ export default function DashboardPage() {
       await api.updateStatus(application.id, status)
       toast.success(`${application.companyName} moved to ${statusLabel(status)}`)
       if (status === 'OFFER') celebrateOffer()
+      // The counts, the interview rate and the next actions may all have changed
+      loadDashboard()
     } catch (err) {
       setStatus(previous)
       moveCount(status, previous)
@@ -166,7 +238,7 @@ export default function DashboardPage() {
         description: `${errorMessage(err)} It is back in ${statusLabel(previous)}.`,
       })
     }
-  }, [])
+  }, [loadDashboard])
 
   const applications = result?.content ?? []
   const onboardingOpen =
@@ -177,7 +249,15 @@ export default function DashboardPage() {
     <PageTransition>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold sm:text-3xl">My applications</h1>
+          <h1 className="text-2xl font-semibold sm:text-3xl" data-testid="greeting">
+            {greeting()}
+            {dashboard?.name ? `, ${dashboard.name}` : ''}
+          </h1>
+          {dashboard && !dashboard.name && !isDemo && (
+            <div className="mt-1.5">
+              <AddName onSaved={(name) => setDashboard((current) => current && { ...current, name })} />
+            </div>
+          )}
           <p className="mt-1 text-sm text-muted-foreground">
             {result ? (
               <>
@@ -203,7 +283,21 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+      {/* The overview is for someone who has applications. A new account sees the checklist instead of four zeros. */}
+      {dashboard && dashboard.totalApplications > 0 && (
+        <>
+          <div className="mt-6">
+            <StatCards dashboard={dashboard} />
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <NextActions actions={dashboard.nextActions} />
+            <ActivityHeatmap days={dashboard.days} />
+          </div>
+        </>
+      )}
+
+      <h2 className="mt-10 text-xl font-semibold">My applications</h2>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         {/* List or board */}
         <Tabs value={view} onValueChange={chooseView}>
           <AnimatedTabsList
@@ -247,15 +341,16 @@ export default function DashboardPage() {
           </div>
         ) : nothingYet && onboardingOpen ? (
           // The checklist above already says what to do first, so no second empty message here
-          <p className="rounded-xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-            No applications yet. They will appear here once you add the first one.
-          </p>
+          <div className="flex flex-col items-center rounded-xl border border-dashed px-6 py-8 text-center text-sm text-muted-foreground">
+            <PaperPlaneArt />
+            <p className="mt-2">No applications yet. They will appear here once you add the first one.</p>
+          </div>
         ) : isBoard ? (
           <KanbanBoard applications={applications} onMove={moveApplication} />
         ) : applications.length === 0 ? (
           filter === 'ALL' ? (
             <EmptyState
-              icon={Plus}
+              art={<PaperPlaneArt />}
               title="No applications yet"
               description="Add the first job you are interested in. Paste the posting and you will see how well your resume fits it."
               action={
@@ -280,6 +375,7 @@ export default function DashboardPage() {
             variants={staggerList}
             initial="hidden"
             animate="show"
+            data-testid="application-list"
             className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${loading ? 'opacity-60' : ''}`}
           >
             {applications.map((application) => (

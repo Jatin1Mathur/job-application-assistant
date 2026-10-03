@@ -1,5 +1,6 @@
 package com.jatin.jobassistant.dto;
 
-public record CoverLetterResponse(Long applicationId, String coverLetter) {
+import com.jatin.jobassistant.entity.CoverLetterTone;
 
+public record CoverLetterResponse(Long applicationId, String coverLetter, CoverLetterTone tone) {
 }

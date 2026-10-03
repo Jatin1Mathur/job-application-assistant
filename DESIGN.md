@@ -390,6 +390,15 @@ An empty state has three parts: an icon in a quiet tile, one sentence that says 
 - **Auth is one form.** Log in and Create account share the fields; a segmented switch moves between them and the typed values stay. Errors sit under their field, in words. The login error is always "Email or password is incorrect".
 - **Success is confirmed.** A drawn check mark for about one second before the app opens.
 
+## App patterns after login
+
+- **Numbers are real or absent.** A value that cannot be calculated yet is replaced by a short sentence, never by 0.
+- **Stat cards** pair one display-font number with a 12-week sparkline in tide. No icons, no coloured backgrounds.
+- **Charts** use tide on the card surface, hairline grids, and straight lines between measured points. Each one has its numbers as text.
+- **Empty states** each have their own small illustration (paper plane, document stack, telescope) in ink, paper, tide and sand.
+- **One 3D object per place.** The backpack belongs to the home page, the compass to login, the score orb to the analysis, the skill universe to insights.
+- **Sand marks "look at this"**: the interview action, a card that has waited more than seven days, the best resume.
+
 ## Do's and don'ts
 
 ### Do

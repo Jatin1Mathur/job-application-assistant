@@ -10,18 +10,19 @@ export default function ChartReveal({
   style,
   ...rest
 }: {
-  direction: 'up' | 'right'
+  // 'in': grows from its centre (for round charts)
+  direction: 'up' | 'right' | 'in'
   children: ReactNode
   className?: string
   style?: React.CSSProperties
   'data-testid'?: string
 }) {
-  const hidden = direction === 'up' ? { opacity: 0, scaleY: 0.2 } : { opacity: 0, scaleX: 0.2 }
+  const hidden = direction === 'up' ? { opacity: 0, scaleY: 0.2 } : direction === 'right' ? { opacity: 0, scaleX: 0.2 } : { opacity: 0, scaleX: 0.8, scaleY: 0.8 }
   return (
     <motion.div
       {...rest}
       className={className}
-      style={{ ...style, transformOrigin: direction === 'up' ? 'bottom' : 'left' }}
+      style={{ ...style, transformOrigin: direction === 'up' ? 'bottom' : direction === 'right' ? 'left' : 'center' }}
       initial={hidden}
       whileInView={{ opacity: 1, scaleX: 1, scaleY: 1 }}
       viewport={{ once: true, margin: '-40px' }}

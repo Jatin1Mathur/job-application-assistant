@@ -1,5 +1,18 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.dto.InsightsResponse.ResumeScore;
+import com.jatin.jobassistant.dto.InsightsResponse.SkillCategory;
+import com.jatin.jobassistant.dto.InsightsResponse.WeekScore;
+import com.jatin.jobassistant.dto.InsightsResponse.FunnelStage;
+import com.jatin.jobassistant.entity.StatusHistory;
+import com.jatin.jobassistant.entity.Resume;
+import com.jatin.jobassistant.entity.JobApplication;
+import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.time.LocalDate;
+import com.jatin.jobassistant.repository.ResumeRepository;
+import com.jatin.jobassistant.repository.StatusHistoryRepository;
+import org.mockito.Spy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +44,15 @@ class InsightsServiceTest {
 
 	@Mock
 	private MatchAnalysisRepository matchAnalysisRepository;
+
+	@Mock
+	private StatusHistoryRepository statusHistoryRepository;
+
+	@Mock
+	private ResumeRepository resumeRepository;
+
+	@Spy
+	private SkillCatalog skillCatalog = new SkillCatalog();
 
 	@InjectMocks
 	private InsightsService insightsService;
@@ -135,6 +157,125 @@ class InsightsServiceTest {
 		analysis.setModelName("llama3.2");
 		analysis.setAnalyzedAt(Instant.now());
 		return analysis;
+	}
+
+	private JobApplication application(long id, ApplicationStatus status) {
+		JobApplication application = new JobApplication();
+		application.setId(id);
+		application.setStatus(status);
+		return application;
+	}
+
+	private MatchAnalysis scored(int score, Long resumeId, String analyzedAt, List<String> matching, List<String> missing) {
+		MatchAnalysis analysis = new MatchAnalysis();
+		analysis.setMatchScore(score);
+		analysis.setResumeId(resumeId);
+		analysis.setAnalyzedAt(Instant.parse(analyzedAt));
+		analysis.setMatchingSkills(matching);
+		analysis.setMissingSkills(missing);
+		return analysis;
+	}
+
+	private Resume resume(long id, String fileName) {
+		Resume resume = new Resume();
+		resume.setId(id);
+		resume.setFileName(fileName);
+		return resume;
+	}
+
+	@Test
+	void funnelCountsHowManyApplicationsEverReachedEachStage() {
+		when(jobApplicationRepository.countByStatus(USER_ID)).thenReturn(List.of());
+		when(jobApplicationRepository.findByUserId(USER_ID)).thenReturn(List.of(application(1, ApplicationStatus.SAVED),
+				application(2, ApplicationStatus.APPLIED), application(3, ApplicationStatus.INTERVIEW),
+				application(4, ApplicationStatus.OFFER), application(5, ApplicationStatus.REJECTED),
+				application(6, ApplicationStatus.REJECTED)));
+		// 5 was rejected after an interview; 6 was rejected without ever being sent
+		when(statusHistoryRepository.findByUserId(USER_ID)).thenReturn(List.of(
+				new StatusHistory(5L, ApplicationStatus.SAVED, ApplicationStatus.APPLIED, Instant.parse("2026-09-01T10:00:00Z")),
+				new StatusHistory(5L, ApplicationStatus.APPLIED, ApplicationStatus.INTERVIEW, Instant.parse("2026-09-10T10:00:00Z")),
+				new StatusHistory(5L, ApplicationStatus.INTERVIEW, ApplicationStatus.REJECTED, Instant.parse("2026-09-20T10:00:00Z"))));
+		when(matchAnalysisRepository.findByUserId(USER_ID)).thenReturn(List.of());
+
+		List<FunnelStage> funnel = insightsService.getInsights(USER_ID).funnel();
+
+		assertThat(funnel).containsExactly(new FunnelStage(ApplicationStatus.SAVED, 6, null),
+				new FunnelStage(ApplicationStatus.APPLIED, 4, 66.7), new FunnelStage(ApplicationStatus.INTERVIEW, 3, 75.0),
+				new FunnelStage(ApplicationStatus.OFFER, 1, 33.3));
+	}
+
+	@Test
+	void funnelOfAnEmptyAccountHasZerosAndNoRates() {
+		when(jobApplicationRepository.countByStatus(USER_ID)).thenReturn(List.of());
+		when(matchAnalysisRepository.findByUserId(USER_ID)).thenReturn(List.of());
+
+		InsightsResponse insights = insightsService.getInsights(USER_ID);
+
+		assertThat(insights.funnel()).extracting(FunnelStage::applications).containsExactly(0L, 0L, 0L, 0L);
+		assertThat(insights.funnel()).extracting(FunnelStage::rateFromPrevious).containsOnlyNulls();
+		assertThat(insights.scoreByWeek()).isEmpty();
+		assertThat(insights.skillCategories()).isEmpty();
+		assertThat(insights.scoreByResume()).isEmpty();
+	}
+
+	@Test
+	void scoreByWeekAveragesTheAnalysesOfEachWeekAndLeavesEmptyWeeksOut() {
+		when(jobApplicationRepository.countByStatus(USER_ID)).thenReturn(List.of());
+		// Monday 2026-09-14 and Sunday 2026-09-20 are the same week; 2026-10-01 is two weeks later
+		when(matchAnalysisRepository.findByUserId(USER_ID)).thenReturn(List.of(
+				scored(60, 1L, "2026-09-14T08:00:00Z", List.of(), List.of()),
+				scored(75, 1L, "2026-09-20T20:00:00Z", List.of(), List.of()),
+				scored(90, 1L, "2026-10-01T08:00:00Z", List.of(), List.of())));
+
+		List<WeekScore> weeks = insightsService.getInsights(USER_ID).scoreByWeek();
+
+		assertThat(weeks).containsExactly(new WeekScore(LocalDate.parse("2026-09-14"), 67.5, 2),
+				new WeekScore(LocalDate.parse("2026-09-28"), 90.0, 1));
+	}
+
+	@Test
+	void scoreByWeekUsesTheUsersTimeZone() {
+		when(jobApplicationRepository.countByStatus(USER_ID)).thenReturn(List.of());
+		// Sunday 23:30 UTC is already Monday in Berlin
+		when(matchAnalysisRepository.findByUserId(USER_ID))
+			.thenReturn(List.of(scored(60, 1L, "2026-09-20T23:30:00Z", List.of(), List.of())));
+
+		assertThat(insightsService.getInsights(USER_ID, ZoneOffset.UTC).scoreByWeek().getFirst().weekStart())
+			.isEqualTo(LocalDate.parse("2026-09-14"));
+		assertThat(insightsService.getInsights(USER_ID, ZoneId.of("Europe/Berlin")).scoreByWeek().getFirst().weekStart())
+			.isEqualTo(LocalDate.parse("2026-09-21"));
+	}
+
+	@Test
+	void skillsAreGroupedByCategoryWithTheirMatchRate() {
+		when(jobApplicationRepository.countByStatus(USER_ID)).thenReturn(List.of());
+		when(matchAnalysisRepository.findByUserId(USER_ID)).thenReturn(List.of(
+				scored(80, 1L, "2026-09-14T08:00:00Z", List.of("Java", "Spring Boot", "PostgreSQL"), List.of("Kubernetes")),
+				scored(60, 1L, "2026-09-15T08:00:00Z", List.of("java", "Docker"), List.of("AWS", "Negotiation"))));
+
+		List<SkillCategory> categories = insightsService.getInsights(USER_ID).skillCategories();
+
+		assertThat(categories).containsExactly(new SkillCategory("Languages", 2, 0, 100.0),
+				new SkillCategory("Frameworks", 1, 0, 100.0), new SkillCategory("Databases", 1, 0, 100.0),
+				new SkillCategory("Cloud and DevOps", 1, 2, 33.3), new SkillCategory("Other", 0, 1, 0.0));
+	}
+
+	@Test
+	void scoreByResumePutsTheBestResumeFirstAndIgnoresDeletedResumes() {
+		when(jobApplicationRepository.countByStatus(USER_ID)).thenReturn(List.of());
+		when(resumeRepository.findByUserIdOrderByCreatedAtDescIdDesc(USER_ID))
+			.thenReturn(List.of(resume(1, "short.pdf"), resume(2, "long.pdf"), resume(3, "unused.pdf")));
+		when(matchAnalysisRepository.findByUserId(USER_ID)).thenReturn(List.of(
+				scored(50, 1L, "2026-09-14T08:00:00Z", List.of(), List.of()),
+				scored(61, 1L, "2026-09-14T08:00:00Z", List.of(), List.of()),
+				scored(82, 2L, "2026-09-14T08:00:00Z", List.of(), List.of()),
+				// Its resume was deleted (99 is not in the list), or the link was removed (null)
+				scored(99, 99L, "2026-09-14T08:00:00Z", List.of(), List.of()),
+				scored(99, null, "2026-09-14T08:00:00Z", List.of(), List.of())));
+
+		List<ResumeScore> scores = insightsService.getInsights(USER_ID).scoreByResume();
+
+		assertThat(scores).containsExactly(new ResumeScore(2L, "long.pdf", 1, 82.0), new ResumeScore(1L, "short.pdf", 2, 55.5));
 	}
 
 }

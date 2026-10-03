@@ -1,5 +1,7 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.repository.ResumeFileRepository;
+import com.jatin.jobassistant.entity.ResumeFile;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -28,6 +30,10 @@ public class ResumeService {
 
 	private final ResumeRepository resumeRepository;
 
+	private final ResumeFileRepository resumeFileRepository;
+
+	private final SkillCatalog skillCatalog;
+
 	public ResumeUploadResponse upload(Long userId, MultipartFile file) {
 		if (file == null || file.isEmpty()) {
 			throw new InvalidFileException("Please upload a PDF in the form-data field \"file\"");
@@ -45,13 +51,17 @@ public class ResumeService {
 		resume.setUserId(userId);
 		resume.setFileName(file.getOriginalFilename());
 		resume.setExtractedText(extractText(bytes));
-		return ResumeUploadResponse.from(resumeRepository.save(resume));
+		resume.setHasFile(true);
+		Resume saved = resumeRepository.save(resume);
+		// The PDF itself is kept too, so the resume can be shown as a picture of its first page
+		resumeFileRepository.save(new ResumeFile(saved.getId(), bytes));
+		return summary(saved);
 	}
 
 	public List<ResumeUploadResponse> list(Long userId) {
 		return resumeRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId)
 			.stream()
-			.map(ResumeUploadResponse::from)
+			.map(this::summary)
 			.toList();
 	}
 
@@ -60,6 +70,20 @@ public class ResumeService {
 		return resumeRepository.findByIdAndUserId(id, userId)
 			.map(ResumeResponse::from)
 			.orElseThrow(() -> new ResumeNotFoundException(id));
+	}
+
+	// The uploaded PDF. Resumes that were uploaded before files were stored have none.
+	public ResumeFileContent getFile(Long userId, Long id) {
+		Resume resume = resumeRepository.findByIdAndUserId(id, userId).orElseThrow(() -> new ResumeNotFoundException(id));
+		byte[] data = resumeFileRepository.findById(id).map(ResumeFile::getData).orElseThrow(() -> new ResumeNotFoundException(id));
+		return new ResumeFileContent(resume.getFileName(), data);
+	}
+
+	public record ResumeFileContent(String fileName, byte[] data) {
+	}
+
+	private ResumeUploadResponse summary(Resume resume) {
+		return ResumeUploadResponse.from(resume, skillCatalog.detect(resume.getExtractedText()));
 	}
 
 	private byte[] readBytes(MultipartFile file) {

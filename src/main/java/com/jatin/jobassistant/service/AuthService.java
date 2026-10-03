@@ -1,5 +1,6 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.dto.AccountResponse;
 import java.util.Locale;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -34,6 +35,7 @@ public class AuthService {
 
 		User user = new User();
 		user.setEmail(email);
+		user.setName(cleanName(request.name()));
 		// Only the BCrypt hash is stored, never the password itself
 		user.setPasswordHash(passwordEncoder.encode(request.password()));
 		try {
@@ -53,6 +55,24 @@ public class AuthService {
 			throw new InvalidCredentialsException();
 		}
 		return tokenFor(user);
+	}
+
+	public AccountResponse account(Long userId) {
+		return AccountResponse.from(userRepository.findById(userId).orElseThrow(InvalidCredentialsException::new));
+	}
+
+	// Sets or removes the name shown in the greeting. The shared demo account keeps its sample name.
+	public AccountResponse updateName(Long userId, String name) {
+		User user = userRepository.findById(userId).orElseThrow(InvalidCredentialsException::new);
+		if (user.isDemo()) {
+			throw new DemoAccountLockedException();
+		}
+		user.setName(cleanName(name));
+		return AccountResponse.from(userRepository.save(user));
+	}
+
+	private String cleanName(String name) {
+		return name == null || name.isBlank() ? null : name.strip();
 	}
 
 	// "Try with demo account": logs the visitor in as the shared demo user, without a password
