@@ -29,6 +29,12 @@ spring:
       max-file-size: 5MB
       max-request-size: 6MB
 
+# Login tokens (JWT). The secret is read from .env and must never be committed
+jwt:
+  secret: ${JWT_SECRET}
+  # How long a login stays valid
+  expiration: 24h
+
 # Local AI model served by Ollama (https://ollama.com)
 ai:
   ollama:
