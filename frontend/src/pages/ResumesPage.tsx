@@ -1,15 +1,21 @@
+import { FileText, FileUp, Loader2 } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
+import { toast } from 'sonner'
 import { api, errorMessage } from '../api.ts'
 import type { ResumeSummary } from '../api.ts'
-import Alert from '../components/Alert.tsx'
-import Spinner from '../components/Spinner.tsx'
-import { card, formatDate } from '../ui.ts'
+import EmptyState from '../components/EmptyState.tsx'
+import ErrorAlert from '../components/ErrorAlert.tsx'
+import PageTransition from '../components/PageTransition.tsx'
+import { Skeleton } from '../components/ui/skeleton.tsx'
+import { formatDate } from '../lib/format.ts'
+import { staggerItem, staggerList } from '../lib/motion.ts'
 
 export default function ResumesPage() {
   const [resumes, setResumes] = useState<ResumeSummary[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -17,21 +23,21 @@ export default function ResumesPage() {
     api
       .listResumes()
       .then(setResumes)
-      .catch((err) => setError(errorMessage(err)))
+      .catch((err) => setLoadError(errorMessage(err)))
   }, [])
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
-    setError(null)
-    setSuccess(null)
+    setUploadError(null)
     setUploading(true)
     try {
       const resume = await api.uploadResume(file)
       setResumes((current) => [resume, ...(current ?? [])])
-      setSuccess(`"${resume.fileName}" was uploaded and its text was extracted.`)
+      toast.success('Resume uploaded', { description: `The text of "${resume.fileName}" was extracted.` })
     } catch (err) {
-      setError(errorMessage(err))
+      setUploadError(errorMessage(err))
+      toast.error('Upload failed', { description: errorMessage(err) })
     } finally {
       setUploading(false)
       // Clear the input so the same file can be chosen again
@@ -40,28 +46,24 @@ export default function ResumesPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold tracking-tight text-slate-900">My resumes</h1>
-      <p className="mt-1 text-sm text-slate-500">
+    <PageTransition>
+      <h1 className="text-2xl font-semibold tracking-tight">My resumes</h1>
+      <p className="mt-1 text-sm text-muted-foreground">
         Upload your resume as a PDF. The AI uses its text to score job matches and write cover letters.
       </p>
 
-      <label
-        className={`${card} mt-6 flex cursor-pointer flex-col items-center justify-center border-2 border-dashed border-slate-300 px-6 py-10 text-center transition hover:border-indigo-400 hover:bg-indigo-50/40 ${uploading ? 'pointer-events-none opacity-70' : ''}`}
+      <motion.label
+        whileHover={uploading ? undefined : { scale: 1.005 }}
+        whileTap={uploading ? undefined : { scale: 0.995 }}
+        className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-card px-6 py-10 text-center transition-colors hover:border-primary/50 hover:bg-accent/40 ${uploading ? 'pointer-events-none opacity-70' : ''}`}
       >
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
-          {uploading ? (
-            <Spinner className="h-5 w-5" />
-          ) : (
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-            </svg>
-          )}
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+          {uploading ? <Loader2 className="size-6 animate-spin" /> : <FileUp className="size-6" strokeWidth={1.75} />}
         </span>
-        <span className="mt-3 text-sm font-semibold text-slate-900">
+        <span className="mt-3 text-sm font-semibold">
           {uploading ? 'Uploading and reading your PDF…' : 'Click to upload a resume'}
         </span>
-        <span className="mt-1 text-xs text-slate-500">PDF only, up to 5 MB</span>
+        <span className="mt-1 text-xs text-muted-foreground">PDF only, up to 5 MB</span>
         <input
           ref={fileInput}
           type="file"
@@ -70,38 +72,59 @@ export default function ResumesPage() {
           onChange={upload}
           disabled={uploading}
         />
-      </label>
+      </motion.label>
 
-      <div className="mt-4 space-y-3">
-        {error && <Alert>{error}</Alert>}
-        {success && <Alert kind="success">{success}</Alert>}
-      </div>
-
-      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Uploaded resumes</h2>
-      {resumes === null && !error ? (
-        <div className="mt-4 flex items-center gap-3 text-sm text-slate-500">
-          <Spinner className="h-5 w-5 text-indigo-600" /> Loading resumes…
+      {uploadError && (
+        <div className="mt-4">
+          <ErrorAlert message={uploadError} />
         </div>
-      ) : resumes?.length === 0 ? (
-        <p className={`${card} mt-4 p-8 text-center text-sm text-slate-500`}>You have not uploaded a resume yet.</p>
-      ) : (
-        <ul className="mt-4 space-y-3">
-          {resumes?.map((resume) => (
-            <li key={resume.id} className={`${card} p-5`}>
-              <div className="flex items-start gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-xs font-bold text-rose-600">
-                  PDF
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900">{resume.fileName}</p>
-                  <p className="text-xs text-slate-500">Uploaded {formatDate(resume.createdAt)}</p>
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{resume.textPreview}…</p>
+      )}
+
+      <h2 className="mt-9 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Uploaded resumes</h2>
+      <div className="mt-3">
+        {loadError ? (
+          <ErrorAlert message={loadError} />
+        ) : resumes === null ? (
+          <div className="space-y-3" aria-busy="true" aria-label="Loading resumes">
+            {[0, 1].map((item) => (
+              <div key={item} className="flex gap-4 rounded-2xl border bg-card p-5">
+                <Skeleton className="size-11 rounded-xl" />
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="mt-2 h-3 w-28" />
+                  <Skeleton className="mt-3 h-3.5 w-full" />
                 </div>
               </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+            ))}
+          </div>
+        ) : resumes.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No resumes yet"
+            description="Upload your first resume above. You need one before the AI can analyze a job or write a cover letter."
+          />
+        ) : (
+          <motion.ul variants={staggerList} initial="hidden" animate="show" className="space-y-3">
+            {resumes.map((resume) => (
+              <motion.li
+                key={resume.id}
+                layout
+                variants={staggerItem}
+                className="flex items-start gap-4 rounded-2xl border bg-card p-5 shadow-xs"
+              >
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                  <FileText className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{resume.fileName}</p>
+                  <p className="text-xs text-muted-foreground">Uploaded {formatDate(resume.createdAt)}</p>
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{resume.textPreview}…</p>
+                </div>
+              </motion.li>
+            ))}
+          </motion.ul>
+        )}
+      </div>
+    </PageTransition>
   )
 }
