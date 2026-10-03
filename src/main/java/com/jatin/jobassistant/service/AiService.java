@@ -7,4 +7,6 @@ public interface AiService {
 
 	MatchAnalysisResponse analyzeMatch(String resumeText, String jobDescription);
 
+	String generateCoverLetter(String resumeText, String jobTitle, String companyName, String jobDescription);
+
 }

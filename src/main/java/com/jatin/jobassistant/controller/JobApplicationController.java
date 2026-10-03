@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
+import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
@@ -60,6 +61,12 @@ public class JobApplicationController {
 	@PostMapping("/{id}/analyze")
 	public MatchAnalysisResponse analyze(@PathVariable Long id, @RequestParam Long resumeId) {
 		return jobApplicationService.analyze(id, resumeId);
+	}
+
+	// Asks the AI to write a cover letter from the resume and stores it on the application
+	@PostMapping("/{id}/cover-letter")
+	public CoverLetterResponse generateCoverLetter(@PathVariable Long id, @RequestParam Long resumeId) {
+		return jobApplicationService.generateCoverLetter(id, resumeId);
 	}
 
 	@DeleteMapping("/{id}")

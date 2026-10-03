@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
+import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
@@ -212,6 +213,57 @@ class JobApplicationServiceTest {
 
 		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L)).isInstanceOf(AiUnavailableException.class);
 		assertThat(application.getMatchScore()).isNull();
+		verify(jobApplicationRepository, never()).save(any());
+	}
+
+	@Test
+	void generateCoverLetterSendsDetailsToTheAiAndSavesTheLetter() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription("Java and Spring Boot");
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", "Java and Spring Boot"))
+			.thenReturn("Dear Hiring Manager, ...");
+
+		CoverLetterResponse response = jobApplicationService.generateCoverLetter(7L, 2L);
+
+		assertThat(response.applicationId()).isEqualTo(7L);
+		assertThat(response.coverLetter()).isEqualTo("Dear Hiring Manager, ...");
+		assertThat(application.getCoverLetter()).isEqualTo("Dear Hiring Manager, ...");
+		verify(jobApplicationRepository).save(application);
+	}
+
+	@Test
+	void generateCoverLetterThrowsWhenResumeDoesNotExist() {
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findById(99L)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 99L))
+			.isInstanceOf(ResumeNotFoundException.class);
+		verifyNoInteractions(aiService);
+	}
+
+	@Test
+	void generateCoverLetterThrowsWhenApplicationHasNoJobDescription() {
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 2L))
+			.isInstanceOf(InvalidAnalysisRequestException.class);
+		verifyNoInteractions(aiService);
+	}
+
+	@Test
+	void generateCoverLetterDoesNotSaveWhenTheAiFails() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription("Java and Spring Boot");
+		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(aiService.generateCoverLetter(any(), any(), any(), any())).thenThrow(new AiTimeoutException("slow", null));
+
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 2L))
+			.isInstanceOf(AiTimeoutException.class);
+		assertThat(application.getCoverLetter()).isNull();
 		verify(jobApplicationRepository, never()).save(any());
 	}
 

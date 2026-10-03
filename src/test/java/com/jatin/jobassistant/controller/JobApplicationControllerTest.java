@@ -23,6 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
+import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
@@ -237,6 +238,43 @@ class JobApplicationControllerTest {
 		when(jobApplicationService.analyze(1L, 2L)).thenThrow(new InvalidAiResponseException("bad answer", null));
 
 		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
+			.andExpect(status().isBadGateway());
+	}
+
+	@Test
+	void coverLetterReturnsTheLetter() throws Exception {
+		when(jobApplicationService.generateCoverLetter(1L, 2L))
+			.thenReturn(new CoverLetterResponse(1L, "Dear Hiring Manager, ..."));
+
+		mockMvc.perform(post("/api/applications/1/cover-letter").param("resumeId", "2"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.applicationId").value(1))
+			.andExpect(jsonPath("$.coverLetter").value("Dear Hiring Manager, ..."));
+	}
+
+	@Test
+	void coverLetterReturns400WhenResumeIdIsMissing() throws Exception {
+		mockMvc.perform(post("/api/applications/1/cover-letter"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("resumeId is required"));
+	}
+
+	@Test
+	void coverLetterReturns503WhenTheAiIsNotRunning() throws Exception {
+		when(jobApplicationService.generateCoverLetter(1L, 2L))
+			.thenThrow(new AiUnavailableException("AI is not running", null));
+
+		mockMvc.perform(post("/api/applications/1/cover-letter").param("resumeId", "2"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.message").value("AI is not running"));
+	}
+
+	@Test
+	void coverLetterReturns502WhenTheAiAnswerIsNotValid() throws Exception {
+		when(jobApplicationService.generateCoverLetter(1L, 2L))
+			.thenThrow(new InvalidAiResponseException("too long", null));
+
+		mockMvc.perform(post("/api/applications/1/cover-letter").param("resumeId", "2"))
 			.andExpect(status().isBadGateway());
 	}
 
