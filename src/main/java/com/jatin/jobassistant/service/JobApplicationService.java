@@ -7,6 +7,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
+import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
@@ -59,13 +60,7 @@ public class JobApplicationService {
 
 	public MatchAnalysisResponse analyze(Long id, Long resumeId) {
 		JobApplication application = find(id);
-		Resume resume = resumeRepository.findById(resumeId).orElseThrow(() -> new ResumeNotFoundException(resumeId));
-		if (isBlank(application.getJobDescription())) {
-			throw new InvalidAnalysisRequestException("This application has no job description to analyze");
-		}
-		if (isBlank(resume.getExtractedText())) {
-			throw new InvalidAnalysisRequestException("This resume has no text to analyze");
-		}
+		Resume resume = findResumeFor(application, resumeId);
 
 		MatchAnalysisResponse analysis = aiService.analyzeMatch(resume.getExtractedText(),
 				application.getJobDescription());
@@ -74,8 +69,31 @@ public class JobApplicationService {
 		return analysis;
 	}
 
+	public CoverLetterResponse generateCoverLetter(Long id, Long resumeId) {
+		JobApplication application = find(id);
+		Resume resume = findResumeFor(application, resumeId);
+
+		String coverLetter = aiService.generateCoverLetter(resume.getExtractedText(), application.getJobTitle(),
+				application.getCompanyName(), application.getJobDescription());
+		application.setCoverLetter(coverLetter);
+		jobApplicationRepository.save(application);
+		return new CoverLetterResponse(application.getId(), coverLetter);
+	}
+
 	public void delete(Long id) {
 		jobApplicationRepository.delete(find(id));
+	}
+
+	// Loads the resume and makes sure both texts the AI needs are there
+	private Resume findResumeFor(JobApplication application, Long resumeId) {
+		Resume resume = resumeRepository.findById(resumeId).orElseThrow(() -> new ResumeNotFoundException(resumeId));
+		if (isBlank(application.getJobDescription())) {
+			throw new InvalidAnalysisRequestException("This application has no job description for the AI to use");
+		}
+		if (isBlank(resume.getExtractedText())) {
+			throw new InvalidAnalysisRequestException("This resume has no text for the AI to use");
+		}
+		return resume;
 	}
 
 	private boolean isBlank(String text) {

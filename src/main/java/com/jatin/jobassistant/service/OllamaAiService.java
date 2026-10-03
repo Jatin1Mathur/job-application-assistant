@@ -4,6 +4,7 @@ import java.net.SocketTimeoutException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +27,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class OllamaAiService implements AiService {
 
-	private static final String SYSTEM_PROMPT = """
+	static final int COVER_LETTER_MAX_WORDS = 300;
+
+	private static final String MATCH_SYSTEM_PROMPT = """
 			You are an experienced technical recruiter. You compare a candidate's resume with a job description.
 			Reply with JSON only, no other text, in exactly this shape:
 			{
@@ -39,6 +42,23 @@ public class OllamaAiService implements AiService {
 			- resumeTips must have exactly 3 items. Each item is one short, concrete tip to improve the resume for this job.
 			- A skill belongs in matchingSkills only if the resume clearly mentions it.
 			- Only use information that is in the resume and the job description.
+			""";
+
+	private static final String COVER_LETTER_SYSTEM_PROMPT = """
+			You write cover letters for job applicants. You get the applicant's resume and a job posting.
+			Write the cover letter in the applicant's own voice ("I").
+			Rules:
+			- Use ONLY facts that are written in the resume. Never invent experience, skills, employers, projects,
+			  degrees, numbers or years. If the job asks for something the resume does not show, do not claim it.
+			  You may say the applicant is eager to learn it.
+			- Keep the facts exactly as the resume states them. For example, a student is not a graduate.
+			- Say nothing about the company that is not in the job posting.
+			- Mention the company name and the job title exactly as given.
+			- Professional, confident and friendly tone.
+			- At most 250 words, in 3 or 4 short paragraphs.
+			- Start with "Dear Hiring Manager," and end with "Sincerely," followed by the applicant's name from the resume.
+			- No placeholders in brackets such as [Your Name] or [Date]. No address block, no subject line.
+			- Reply with the cover letter only, as plain text. No introduction, no notes, no markdown.
 			""";
 
 	private final RestClient restClient;
@@ -63,27 +83,52 @@ public class OllamaAiService implements AiService {
 
 	@Override
 	public MatchAnalysisResponse analyzeMatch(String resumeText, String jobDescription) {
-		return parse(chat(SYSTEM_PROMPT, buildUserPrompt(resumeText, jobDescription)));
-	}
-
-	private String buildUserPrompt(String resumeText, String jobDescription) {
-		return """
+		String userPrompt = """
 				RESUME:
 				%s
 
 				JOB DESCRIPTION:
 				%s
 				""".formatted(resumeText.strip(), jobDescription.strip());
+		return parse(chat(MATCH_SYSTEM_PROMPT, userPrompt, true));
 	}
 
-	private String chat(String systemPrompt, String userPrompt) {
-		Map<String, Object> request = Map.of(
-				"model", model,
-				"stream", false, // one complete answer instead of word-by-word chunks
-				"format", "json", // JSON mode: the model may only produce valid JSON
-				"options", Map.of("temperature", 0), // same input gives (nearly) the same answer
-				"messages", List.of(Map.of("role", "system", "content", systemPrompt),
-						Map.of("role", "user", "content", userPrompt)));
+	@Override
+	public String generateCoverLetter(String resumeText, String jobTitle, String companyName,
+			String jobDescription) {
+		String userPrompt = """
+				COMPANY NAME: %s
+				JOB TITLE: %s
+
+				JOB DESCRIPTION:
+				%s
+
+				RESUME:
+				%s
+				""".formatted(companyName, jobTitle, jobDescription.strip(), resumeText.strip());
+		String coverLetter = chat(COVER_LETTER_SYSTEM_PROMPT, userPrompt, false).strip();
+		if (coverLetter.isEmpty()) {
+			throw new InvalidAiResponseException("The AI returned an empty answer. Please try again", null);
+		}
+		// The prompt asks for less, but a model can ignore it, so the limit is checked here too
+		if (coverLetter.split("\\s+").length > COVER_LETTER_MAX_WORDS) {
+			throw new InvalidAiResponseException(
+					"The AI wrote a cover letter longer than " + COVER_LETTER_MAX_WORDS + " words. Please try again",
+					null);
+		}
+		return coverLetter;
+	}
+
+	private String chat(String systemPrompt, String userPrompt, boolean jsonMode) {
+		Map<String, Object> request = new HashMap<>();
+		request.put("model", model);
+		request.put("stream", false); // one complete answer instead of word-by-word chunks
+		request.put("options", Map.of("temperature", 0)); // same input gives (nearly) the same answer
+		request.put("messages", List.of(Map.of("role", "system", "content", systemPrompt),
+				Map.of("role", "user", "content", userPrompt)));
+		if (jsonMode) {
+			request.put("format", "json"); // JSON mode: the model may only produce valid JSON
+		}
 		try {
 			OllamaChatResponse response = restClient.post()
 				.uri("/api/chat")
