@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -149,6 +150,25 @@ class ResumeServiceTest {
 
 		assertThatThrownBy(() -> resumeService.getById(OTHER_USER_ID, 7L))
 			.isInstanceOf(ResumeNotFoundException.class);
+	}
+
+	@Test
+	void listReturnsOnlyTheUsersResumesWithAPreview() {
+		Resume resume = new Resume();
+		resume.setId(7L);
+		resume.setUserId(USER_ID);
+		resume.setFileName("resume.pdf");
+		resume.setExtractedText("x".repeat(500));
+		resume.setCreatedAt(Instant.now());
+		when(resumeRepository.findByUserIdOrderByCreatedAtDescIdDesc(USER_ID)).thenReturn(List.of(resume));
+		when(resumeRepository.findByUserIdOrderByCreatedAtDescIdDesc(OTHER_USER_ID)).thenReturn(List.of());
+
+		List<ResumeUploadResponse> mine = resumeService.list(USER_ID);
+
+		assertThat(mine).hasSize(1);
+		assertThat(mine.get(0).id()).isEqualTo(7L);
+		assertThat(mine.get(0).textPreview()).hasSize(200);
+		assertThat(resumeService.list(OTHER_USER_ID)).isEmpty();
 	}
 
 	@Test

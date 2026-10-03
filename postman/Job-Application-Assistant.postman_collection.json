@@ -205,6 +205,25 @@
           "response": []
         },
         {
+          "name": "List resumes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/resumes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "resumes"
+              ]
+            },
+            "description": "Lists your uploaded resumes, newest first. Each item has id, fileName, createdAt and textPreview (the first 200 characters)."
+          },
+          "response": []
+        },
+        {
           "name": "Get resume",
           "request": {
             "method": "GET",

@@ -1,5 +1,7 @@
 package com.jatin.jobassistant.controller;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,6 +34,11 @@ public class ResumeController {
 	public ResumeUploadResponse upload(@AuthenticationPrincipal Jwt jwt,
 			@RequestParam(value = "file", required = false) MultipartFile file) {
 		return resumeService.upload(CurrentUser.id(jwt), file);
+	}
+
+	@GetMapping
+	public List<ResumeUploadResponse> list(@AuthenticationPrincipal Jwt jwt) {
+		return resumeService.list(CurrentUser.id(jwt));
 	}
 
 	@GetMapping("/{id}")

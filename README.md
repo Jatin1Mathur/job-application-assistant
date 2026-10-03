@@ -9,7 +9,22 @@ A Spring Boot API to track job applications, upload a resume, and let a local AI
 3. Start Ollama with the `llama3.2` model (only needed for the AI requests).
 4. Start the app: `./mvnw spring-boot:run`
 
-The app runs on http://localhost:8080.
+The backend runs on http://localhost:8080.
+
+## Running the frontend
+
+The frontend is a React + Vite + TypeScript app with Tailwind CSS in the `frontend` folder. It needs Node.js 20.19 or newer.
+
+1. Start the backend first (see above).
+2. In a second terminal:
+   ```
+   cd frontend
+   npm install   # only the first time
+   npm run dev
+   ```
+3. Open http://localhost:5173 in your browser.
+
+The dev server passes every `/api` call on to the backend on port 8080 (see `frontend/vite.config.ts`), so the backend needs no CORS settings.
 
 ## Testing with Postman
 
