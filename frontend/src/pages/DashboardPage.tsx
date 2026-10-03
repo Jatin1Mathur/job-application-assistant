@@ -16,6 +16,7 @@ import type { OnboardingState } from '../components/OnboardingChecklist.tsx'
 import PageTransition from '../components/PageTransition.tsx'
 import ScoreRing from '../components/ScoreRing.tsx'
 import StatusBadge from '../components/StatusBadge.tsx'
+import TiltCard from '../components/TiltCard.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
 import { Tabs } from '../components/ui/tabs.tsx'
@@ -51,6 +52,7 @@ function ApplicationCard({ application }: { application: Application }) {
     // variants: the card takes part in the list's stagger. whileHover: it lifts a little under the mouse
     <motion.li variants={staggerItem} whileHover={{ y: -4 }} transition={{ duration: 0.18 }}>
       {/* state: hands the application to the detail page, so its header can be drawn immediately */}
+      <TiltCard className="h-full">
       <Link to={`/applications/${application.id}`} state={{ application }} className="group block h-full rounded-2xl">
         {/* layoutId: the detail page's header has the same one, so this card grows into it */}
         <motion.div
@@ -80,6 +82,7 @@ function ApplicationCard({ application }: { application: Application }) {
         </div>
         </motion.div>
       </Link>
+      </TiltCard>
     </motion.li>
   )
 }

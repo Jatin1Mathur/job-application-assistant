@@ -1,13 +1,18 @@
 import { ArrowRight, BarChart3, Check, FileUp, PenLine, Sparkles, Target } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { lazy, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import GalaxyFallback from '../components/GalaxyFallback.tsx'
+import Lazy3D from '../components/Lazy3D.tsx'
 import Logo from '../components/Logo.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import ScoreRing from '../components/ScoreRing.tsx'
 import ThemeToggle from '../components/ThemeToggle.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
+
+// The 3D code is a separate download that starts only when the galaxy is about to be shown
+const SkillGalaxy = lazy(() => import('../three/SkillGalaxy.tsx'))
 
 const FEATURES = [
   {
@@ -106,17 +111,8 @@ function PreviewCard() {
   )
 }
 
-const FLOATING_SKILLS = [
-  { label: 'Java', className: 'left-[4%] top-[14%]', duration: 7 },
-  { label: 'React', className: 'left-[38%] top-[6%]', duration: 9 },
-  { label: 'Docker', className: 'right-[6%] top-[10%]', duration: 8 },
-  { label: 'SQL', className: 'left-[46%] bottom-[12%]', duration: 10 },
-  { label: 'Python', className: 'left-[2%] bottom-[8%]', duration: 8.5 },
-  { label: 'Kubernetes', className: 'right-[3%] bottom-[6%]', duration: 7.5 },
-]
-
-// The hero background: three soft color blobs that drift slowly (a "gradient mesh"), and a few skill
-// tags floating behind the content. Decorative only, so it is hidden from screen readers.
+// The hero background: three soft color blobs that drift slowly (a "gradient mesh").
+// Decorative only, so it is hidden from screen readers.
 function HeroBackground() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -135,16 +131,6 @@ function HeroBackground() {
         animate={{ x: [0, 40, 0], y: [0, -40, 0] }}
         transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
       />
-      {FLOATING_SKILLS.map(({ label, className, duration }) => (
-        <motion.span
-          key={label}
-          className={`absolute hidden rounded-full border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground/80 backdrop-blur-sm md:block ${className}`}
-          animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }}
-          transition={{ duration, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {label}
-        </motion.span>
-      ))}
     </div>
   )
 }
@@ -212,9 +198,40 @@ export default function LandingPage() {
                 ))}
               </motion.ul>
             </motion.div>
-            <div className="flex justify-center lg:justify-end">
-              <PreviewCard />
+            {/* The 3D skill galaxy. Until its code has loaded (and without WebGL or with "reduce motion")
+                the static drawing of the same galaxy is shown, so this column is never empty. */}
+            <div>
+              <Lazy3D
+                label="A galaxy of skills connected by lines. Skills you have glow; skills you are missing are dimmer."
+                className="relative mx-auto h-72 w-full max-w-lg sm:h-[26rem]"
+                fallback={<GalaxyFallback />}
+                scene={(props) => <SkillGalaxy {...props} />}
+              />
+              <p className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full bg-brand ring-1 ring-foreground/25" /> Skills you have
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full bg-muted ring-1 ring-foreground/25" /> Skills to learn
+                </span>
+              </p>
             </div>
+          </div>
+        </section>
+
+        {/* What an analysis looks like */}
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pt-4 sm:px-6 lg:grid-cols-2" aria-labelledby="preview-heading">
+          <div className="flex justify-center lg:order-2 lg:justify-end">
+            <PreviewCard />
+          </div>
+          <div>
+            <h2 id="preview-heading" className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              One number, and the reasons behind it
+            </h2>
+            <p className="mt-3 max-w-md text-muted-foreground">
+              Every analysis gives a score from 0 to 100, the skills that match, the skills that are missing, and
+              three tips for your resume. You can check each skill against the job posting yourself.
+            </p>
           </div>
         </section>
 

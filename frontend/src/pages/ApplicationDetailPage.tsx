@@ -11,7 +11,7 @@ import HighlightedText from '../components/HighlightedText.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import PageTransition from '../components/PageTransition.tsx'
-import ScoreRing from '../components/ScoreRing.tsx'
+import ScoreDisplay from '../components/ScoreDisplay.tsx'
 import { StatusDot } from '../components/StatusBadge.tsx'
 import { Button } from '../components/ui/button.tsx'
 import {
@@ -412,7 +412,7 @@ export default function ApplicationDetailPage() {
                 className="mt-6"
               >
                 <div className="flex flex-wrap items-center gap-6">
-                  <ScoreRing score={score} />
+                  <ScoreDisplay score={score} />
                   <div className="min-w-0 flex-1">
                     <p className={`text-lg font-semibold ${scoreTone(score).text}`}>{scoreTone(score).label}</p>
                     <p className="mt-1 text-sm text-muted-foreground">

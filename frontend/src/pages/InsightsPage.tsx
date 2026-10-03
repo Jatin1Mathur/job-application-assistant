@@ -11,6 +11,7 @@ import ErrorAlert from '../components/ErrorAlert.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import PageTransition from '../components/PageTransition.tsx'
 import ScoreRing from '../components/ScoreRing.tsx'
+import SkillUniverseSection from '../components/SkillUniverseSection.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
 import { scoreTone } from '../lib/format.ts'
 import { statusLabel } from '../lib/status.ts'
@@ -198,6 +199,13 @@ export default function InsightsPage() {
                   </span>
                 </p>
               )}
+              <div className="mt-4">
+                <SkillUniverseSection skills={insights.topMissingSkills} analyzed={insights.analyzedApplications} />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Bigger and closer means missing more often. Hover or tap a skill for its number. The same numbers
+                  are in the chart below.
+                </p>
+              </div>
               {/* 36px per skill keeps the bars thin however many skills there are */}
               <ChartReveal direction="right" className="mt-4" style={{ height: skillRows.length * 36 + 24 }} data-testid="skills-chart">
                 <ResponsiveContainer width="100%" height="100%">
