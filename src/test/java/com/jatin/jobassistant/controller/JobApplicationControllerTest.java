@@ -23,9 +23,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.jatin.jobassistant.dto.ApplicationResponse;
+import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
+import com.jatin.jobassistant.service.AiTimeoutException;
+import com.jatin.jobassistant.service.AiUnavailableException;
 import com.jatin.jobassistant.service.ApplicationNotFoundException;
+import com.jatin.jobassistant.service.InvalidAiResponseException;
 import com.jatin.jobassistant.service.JobApplicationService;
 
 // Starts only the web layer (controller + GlobalExceptionHandler); the service is a mock, so no database is needed
@@ -189,6 +193,51 @@ class JobApplicationControllerTest {
 		doThrow(new ApplicationNotFoundException(99L)).when(jobApplicationService).delete(99L);
 
 		mockMvc.perform(delete("/api/applications/99")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void analyzeReturnsTheAnalysis() throws Exception {
+		when(jobApplicationService.analyze(1L, 2L)).thenReturn(new MatchAnalysisResponse(80, List.of("Java"),
+				List.of("Kubernetes"), List.of("tip 1", "tip 2", "tip 3")));
+
+		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.matchScore").value(80))
+			.andExpect(jsonPath("$.matchingSkills[0]").value("Java"))
+			.andExpect(jsonPath("$.missingSkills[0]").value("Kubernetes"))
+			.andExpect(jsonPath("$.resumeTips.length()").value(3));
+	}
+
+	@Test
+	void analyzeReturns400WhenResumeIdIsMissing() throws Exception {
+		mockMvc.perform(post("/api/applications/1/analyze"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("resumeId is required"));
+	}
+
+	@Test
+	void analyzeReturns503WhenTheAiIsNotRunning() throws Exception {
+		when(jobApplicationService.analyze(1L, 2L)).thenThrow(new AiUnavailableException("AI is not running", null));
+
+		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.message").value("AI is not running"));
+	}
+
+	@Test
+	void analyzeReturns504WhenTheAiTimesOut() throws Exception {
+		when(jobApplicationService.analyze(1L, 2L)).thenThrow(new AiTimeoutException("AI took too long", null));
+
+		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
+			.andExpect(status().isGatewayTimeout());
+	}
+
+	@Test
+	void analyzeReturns502WhenTheAiAnswerIsNotValid() throws Exception {
+		when(jobApplicationService.analyze(1L, 2L)).thenThrow(new InvalidAiResponseException("bad answer", null));
+
+		mockMvc.perform(post("/api/applications/1/analyze").param("resumeId", "2"))
+			.andExpect(status().isBadGateway());
 	}
 
 	private ApplicationResponse response(Long id, ApplicationStatus status) {
