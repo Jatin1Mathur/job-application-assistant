@@ -41,7 +41,7 @@ export default function NewApplicationPage() {
 
   return (
     <PageTransition className="mx-auto max-w-2xl">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+      <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Back to applications
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">New application</h1>
@@ -97,7 +97,7 @@ export default function NewApplicationPage() {
         </div>
         <div className="flex justify-end gap-3 border-t pt-5">
           <Button asChild variant="outline" size="lg">
-            <Link to="/">Cancel</Link>
+            <Link to="/dashboard">Cancel</Link>
           </Button>
           <MotionButton type="submit" size="lg" disabled={saving}>
             {saving && <Loader2 className="animate-spin" />}

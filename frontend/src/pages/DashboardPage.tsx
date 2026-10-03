@@ -1,12 +1,16 @@
-import { BriefcaseBusiness, ChevronLeft, ChevronRight, Plus, SearchX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Columns3, LayoutGrid, Plus, SearchX } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { api, errorMessage, STATUSES } from '../api.ts'
 import type { Application, ApplicationStatus, Page } from '../api.ts'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
+import KanbanBoard from '../components/KanbanBoard.tsx'
 import MotionButton from '../components/MotionButton.tsx'
+import OnboardingChecklist from '../components/OnboardingChecklist.tsx'
+import type { OnboardingState } from '../components/OnboardingChecklist.tsx'
 import PageTransition from '../components/PageTransition.tsx'
 import ScoreRing from '../components/ScoreRing.tsx'
 import StatusBadge from '../components/StatusBadge.tsx'
@@ -18,8 +22,12 @@ import { staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
 
 const PAGE_SIZE = 9
+// The board shows every application at once (the backend allows at most 100 per request)
+const BOARD_SIZE = 100
+const VIEW_KEY = 'job-assistant.view'
 
 type Filter = ApplicationStatus | 'ALL'
+type View = 'list' | 'board'
 
 function CardSkeleton() {
   return (
@@ -69,33 +77,88 @@ function ApplicationCard({ application }: { application: Application }) {
 }
 
 export default function DashboardPage() {
+  const [view, setView] = useState<View>(() => (localStorage.getItem(VIEW_KEY) === 'board' ? 'board' : 'list'))
   const [filter, setFilter] = useState<Filter>('ALL')
   const [page, setPage] = useState(0)
   const [result, setResult] = useState<Page<Application> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
 
-  // Load the list again whenever the filter or the page number changes
+  const isBoard = view === 'board'
+
+  // Load the applications again whenever the view, the filter or the page number changes.
+  // The board ignores the filter and paging: it shows everything, grouped by status.
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    api
-      .listApplications(filter === 'ALL' ? null : filter, page, PAGE_SIZE)
+    const request = isBoard
+      ? api.listApplications(null, 0, BOARD_SIZE)
+      : api.listApplications(filter === 'ALL' ? null : filter, page, PAGE_SIZE)
+    request
       .then((data) => !cancelled && setResult(data))
       .catch((err) => !cancelled && setError(errorMessage(err)))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [filter, page])
+  }, [isBoard, filter, page])
+
+  // What the onboarding checklist needs to know. It is only shown while a step is still open.
+  useEffect(() => {
+    Promise.all([api.listResumes(), api.getInsights(), api.listApplications(null, 0, 1)])
+      .then(([resumes, insights, firstPage]) =>
+        setOnboarding({
+          hasResume: resumes.length > 0,
+          hasApplication: insights.totalApplications > 0,
+          hasAnalysis: insights.analyzedApplications > 0,
+          firstApplicationId: firstPage.content[0]?.id ?? null,
+        }),
+      )
+      .catch(() => setOnboarding(null))
+  }, [])
+
+  function chooseView(next: string) {
+    localStorage.setItem(VIEW_KEY, next)
+    setView(next as View)
+    setPage(0)
+    setResult(null)
+  }
 
   function chooseFilter(next: string) {
     setFilter(next as Filter)
     setPage(0)
   }
 
+  // Dragging a card to another column. The board changes at once ("optimistic update"), without waiting
+  // for the backend. If the backend then says no, the card is put back and the error is shown.
+  const moveApplication = useCallback(async (application: Application, status: ApplicationStatus) => {
+    const setStatus = (next: ApplicationStatus) =>
+      setResult(
+        (current) =>
+          current && {
+            ...current,
+            content: current.content.map((item) => (item.id === application.id ? { ...item, status: next } : item)),
+          },
+      )
+    const previous = application.status
+    setStatus(status)
+    try {
+      await api.updateStatus(application.id, status)
+      toast.success(`${application.companyName} moved to ${statusLabel(status)}`)
+    } catch (err) {
+      setStatus(previous)
+      toast.error('Could not move the application', {
+        description: `${errorMessage(err)} It is back in ${statusLabel(previous)}.`,
+      })
+    }
+  }, [])
+
   const applications = result?.content ?? []
+  const onboardingOpen =
+    onboarding !== null && !(onboarding.hasResume && onboarding.hasApplication && onboarding.hasAnalysis)
+  const nothingYet = !loading && !error && filter === 'ALL' && applications.length === 0
 
   return (
     <PageTransition>
@@ -104,7 +167,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight">My applications</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {result
-              ? `${result.totalElements} ${result.totalElements === 1 ? 'application' : 'applications'}${filter === 'ALL' ? '' : ` with status ${statusLabel(filter)}`}`
+              ? `${result.totalElements} ${result.totalElements === 1 ? 'application' : 'applications'}${!isBoard && filter !== 'ALL' ? ` with status ${statusLabel(filter)}` : ''}`
               : 'Loading…'}
           </p>
         </div>
@@ -115,32 +178,63 @@ export default function DashboardPage() {
         </MotionButton>
       </div>
 
-      <Tabs value={filter} onValueChange={chooseFilter} className="mt-6">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <TabsList>
-            <TabsTrigger value="ALL">All</TabsTrigger>
-            {STATUSES.map((status) => (
-              <TabsTrigger key={status} value={status}>
-                {statusLabel(status)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      {onboardingOpen && (
+        <div className="mt-6">
+          <OnboardingChecklist state={onboarding} />
         </div>
-      </Tabs>
+      )}
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        {/* List or board */}
+        <Tabs value={view} onValueChange={chooseView}>
+          <TabsList aria-label="View">
+            <TabsTrigger value="list">
+              <LayoutGrid /> List
+            </TabsTrigger>
+            <TabsTrigger value="board">
+              <Columns3 /> Board
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {!isBoard && (
+          <Tabs value={filter} onValueChange={chooseFilter} className="min-w-0">
+            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+              <TabsList aria-label="Status filter">
+                <TabsTrigger value="ALL">All</TabsTrigger>
+                {STATUSES.map((status) => (
+                  <TabsTrigger key={status} value={status}>
+                    {statusLabel(status)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+          </Tabs>
+        )}
+        {isBoard && (
+          <p className="text-xs text-muted-foreground">Drag a card by its handle to change the status.</p>
+        )}
+      </div>
+
+      <div className="mt-5">
         {error ? (
           <ErrorAlert message={error} />
-        ) : loading ? (
+        ) : loading && !result ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading applications">
             {[0, 1, 2].map((item) => (
               <CardSkeleton key={item} />
             ))}
           </div>
+        ) : nothingYet && onboardingOpen ? (
+          // The checklist above already says what to do first, so no second empty message here
+          <p className="rounded-2xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+            No applications yet. Your applications will appear here.
+          </p>
+        ) : isBoard ? (
+          <KanbanBoard applications={applications} onMove={moveApplication} />
         ) : applications.length === 0 ? (
           filter === 'ALL' ? (
             <EmptyState
-              icon={BriefcaseBusiness}
+              icon={Plus}
               title="No applications yet"
               description="Create your first one: paste a job posting and let the AI compare it with your resume."
               action={
@@ -165,7 +259,7 @@ export default function DashboardPage() {
             variants={staggerList}
             initial="hidden"
             animate="show"
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${loading ? 'opacity-60' : ''}`}
           >
             {applications.map((application) => (
               <ApplicationCard key={application.id} application={application} />
@@ -174,7 +268,13 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {result && result.totalPages > 1 && (
+      {isBoard && result && result.totalElements > BOARD_SIZE && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          The board shows your {BOARD_SIZE} newest applications. Use the list view to see all {result.totalElements}.
+        </p>
+      )}
+
+      {!isBoard && result && result.totalPages > 1 && (
         <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
           <span>
             Page {result.page + 1} of {result.totalPages}

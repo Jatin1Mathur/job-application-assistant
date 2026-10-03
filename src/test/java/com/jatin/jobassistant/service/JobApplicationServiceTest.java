@@ -32,8 +32,10 @@ import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.entity.JobApplication;
+import com.jatin.jobassistant.entity.MatchAnalysis;
 import com.jatin.jobassistant.entity.Resume;
 import com.jatin.jobassistant.repository.JobApplicationRepository;
+import com.jatin.jobassistant.repository.MatchAnalysisRepository;
 import com.jatin.jobassistant.repository.ResumeRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,6 +58,9 @@ class JobApplicationServiceTest {
 
 	@Mock
 	private MatchAnalysisCache matchAnalysisCache;
+
+	@Mock
+	private MatchAnalysisRepository matchAnalysisRepository;
 
 	@InjectMocks
 	private JobApplicationService jobApplicationService;
@@ -225,6 +230,133 @@ class JobApplicationServiceTest {
 	}
 
 	@Test
+	void analyzeSavesTheFullAnalysisWithModelNameAndDate() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
+		when(aiService.analyzeMatch("I know Java", JOB_DESCRIPTION)).thenReturn(new MatchAnalysisResponse(80,
+				List.of("Java"), List.of("Spring Boot"), List.of("tip 1", "tip 2", "tip 3")));
+		when(aiService.modelName()).thenReturn("llama3.2");
+
+		jobApplicationService.analyze(USER_ID, 7L, 2L);
+
+		ArgumentCaptor<MatchAnalysis> saved = ArgumentCaptor.forClass(MatchAnalysis.class);
+		verify(matchAnalysisRepository).save(saved.capture());
+		assertThat(saved.getValue().getApplicationId()).isEqualTo(7L);
+		assertThat(saved.getValue().getResumeId()).isEqualTo(2L);
+		assertThat(saved.getValue().getMatchScore()).isEqualTo(80);
+		assertThat(saved.getValue().getMatchingSkills()).containsExactly("Java");
+		assertThat(saved.getValue().getMissingSkills()).containsExactly("Spring Boot");
+		assertThat(saved.getValue().getResumeTips()).hasSize(3);
+		assertThat(saved.getValue().getModelName()).isEqualTo("llama3.2");
+		assertThat(saved.getValue().getAnalyzedAt()).isNotNull();
+	}
+
+	@Test
+	void analyzeAgainReplacesTheSavedAnalysisInsteadOfAddingASecondOne() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		MatchAnalysis existing = savedAnalysis(7L, 2L, 40);
+		existing.setId(55L);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
+		when(aiService.analyzeMatch(any(), any()))
+			.thenReturn(new MatchAnalysisResponse(90, List.of("Java"), List.of(), List.of("tip")));
+		when(aiService.modelName()).thenReturn("llama3.2");
+		when(matchAnalysisRepository.findByApplicationId(7L)).thenReturn(Optional.of(existing));
+
+		jobApplicationService.analyze(USER_ID, 7L, 2L);
+
+		ArgumentCaptor<MatchAnalysis> saved = ArgumentCaptor.forClass(MatchAnalysis.class);
+		verify(matchAnalysisRepository).save(saved.capture());
+		assertThat(saved.getValue().getId()).isEqualTo(55L);
+		assertThat(saved.getValue().getMatchScore()).isEqualTo(90);
+	}
+
+	@Test
+	void analyzeFromCacheKeepsTheAlreadySavedAnalysis() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional
+			.of(new MatchAnalysisResponse(80, List.of("Java"), List.of("Spring Boot"), List.of("tip"))));
+		when(matchAnalysisRepository.findByApplicationId(7L)).thenReturn(Optional.of(savedAnalysis(7L, 2L, 80)));
+
+		jobApplicationService.analyze(USER_ID, 7L, 2L);
+
+		verify(matchAnalysisRepository, never()).save(any());
+	}
+
+	@Test
+	void analyzeDoesNotSaveAnAnalysisWhenTheAiFails() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
+		when(aiService.analyzeMatch(any(), any())).thenThrow(new AiTimeoutException("slow", null));
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 7L, 2L))
+			.isInstanceOf(AiTimeoutException.class);
+		verifyNoInteractions(matchAnalysisRepository);
+	}
+
+	@Test
+	void getByIdReturnsTheSavedAnalysisWithTheApplication() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID))
+			.thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(matchAnalysisRepository.findByApplicationId(7L)).thenReturn(Optional.of(savedAnalysis(7L, 2L, 80)));
+
+		ApplicationResponse response = jobApplicationService.getById(USER_ID, 7L);
+
+		assertThat(response.analysis()).isNotNull();
+		assertThat(response.analysis().matchScore()).isEqualTo(80);
+		assertThat(response.analysis().missingSkills()).containsExactly("Docker");
+		assertThat(response.analysis().modelName()).isEqualTo("llama3.2");
+		assertThat(response.analysis().resumeId()).isEqualTo(2L);
+	}
+
+	@Test
+	void getByIdReturnsNoAnalysisBeforeTheApplicationWasAnalyzed() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID))
+			.thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+
+		assertThat(jobApplicationService.getById(USER_ID, 7L).analysis()).isNull();
+	}
+
+	@Test
+	void listAttachesEachSavedAnalysisToItsApplication() {
+		when(jobApplicationRepository.findByUserId(eq(USER_ID), any(Pageable.class)))
+			.thenAnswer(invocation -> new PageImpl<>(
+					List.of(application(2L, ApplicationStatus.APPLIED), application(1L, ApplicationStatus.SAVED)),
+					invocation.getArgument(1), 2));
+		when(matchAnalysisRepository.findByApplicationIdIn(List.of(2L, 1L)))
+			.thenReturn(List.of(savedAnalysis(1L, 2L, 65)));
+
+		PageResponse<ApplicationResponse> response = jobApplicationService.list(USER_ID, null, 0, 10);
+
+		assertThat(response.content().get(0).analysis()).isNull();
+		assertThat(response.content().get(1).analysis().matchScore()).isEqualTo(65);
+	}
+
+	private MatchAnalysis savedAnalysis(Long applicationId, Long resumeId, int score) {
+		MatchAnalysis analysis = new MatchAnalysis();
+		analysis.setApplicationId(applicationId);
+		analysis.setResumeId(resumeId);
+		analysis.setMatchScore(score);
+		analysis.setMatchingSkills(List.of("Java"));
+		analysis.setMissingSkills(List.of("Docker"));
+		analysis.setResumeTips(List.of("tip 1", "tip 2", "tip 3"));
+		analysis.setModelName("llama3.2");
+		analysis.setAnalyzedAt(Instant.now());
+		return analysis;
+	}
+
+	@Test
 	void analyzeReturnsTheCachedResultWithoutCallingTheAi() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription(JOB_DESCRIPTION);
@@ -239,7 +371,7 @@ class JobApplicationServiceTest {
 		assertThat(result.analysis()).isEqualTo(cached);
 		assertThat(result.fromCache()).isTrue();
 		assertThat(application.getMatchScore()).isEqualTo(80);
-		verifyNoInteractions(aiService);
+		verify(aiService, never()).analyzeMatch(any(), any());
 		verify(matchAnalysisCache, never()).put(any(), any(), any(), any());
 	}
 
