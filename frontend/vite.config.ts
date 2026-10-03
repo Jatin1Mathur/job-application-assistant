@@ -1,10 +1,15 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import path from 'node:path'
 import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    // Lets code import from '@/...' instead of long '../../' paths (used by the shadcn/ui components)
+    alias: { '@': path.resolve(import.meta.dirname, './src') },
+  },
   server: {
     port: 5173,
     // The browser only talks to this dev server; /api calls are passed on to the Spring Boot backend.

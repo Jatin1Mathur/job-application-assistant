@@ -152,6 +152,8 @@ export const api = {
     return { analysis: data as MatchAnalysis, cached: response.headers.get('X-Cache') === 'HIT' }
   },
 
+  deleteApplication: (id: number) => request<void>(`/applications/${id}`, { method: 'DELETE' }),
+
   generateCoverLetter: (id: number, resumeId: number) =>
     request<{ applicationId: number; coverLetter: string }>(`/applications/${id}/cover-letter?resumeId=${resumeId}`, {
       method: 'POST',

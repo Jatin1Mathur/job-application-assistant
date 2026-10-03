@@ -13,7 +13,7 @@ The backend runs on http://localhost:8080.
 
 ## Running the frontend
 
-The frontend is a React + Vite + TypeScript app with Tailwind CSS in the `frontend` folder. It needs Node.js 20.19 or newer.
+The frontend is a React + Vite + TypeScript app with Tailwind CSS in the `frontend` folder. It uses shadcn/ui components, Motion for animations, lucide icons and sonner toasts, and has a light and a dark mode. It needs Node.js 20.19 or newer.
 
 1. Start the backend first (see above).
 2. In a second terminal:
