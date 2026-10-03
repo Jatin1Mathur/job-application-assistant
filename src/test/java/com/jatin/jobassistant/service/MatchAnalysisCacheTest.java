@@ -39,20 +39,24 @@ class MatchAnalysisCacheTest {
 	@Mock
 	private ValueOperations<String, String> valueOperations;
 
+	@Mock
+	private AiService aiService;
+
 	private MatchAnalysisCache cache;
 
 	@BeforeEach
 	void setUp() {
 		// lenient: the two key-only tests never touch Redis
 		lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-		cache = new MatchAnalysisCache(redisTemplate, JsonMapper.builder().build());
+		lenient().when(aiService.modelName()).thenReturn("llama3.2");
+		cache = new MatchAnalysisCache(redisTemplate, JsonMapper.builder().build(), aiService);
 	}
 
 	@Test
-	void keyContainsResumeIdApplicationIdAndAHashOfTheJobDescription() {
-		String key = MatchAnalysisCache.key(2L, 4L, "Java developer");
+	void keyContainsModelResumeIdApplicationIdAndAHashOfTheJobDescription() {
+		String key = MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer");
 
-		assertThat(key).startsWith("match-analysis:resume:2:application:4:");
+		assertThat(key).startsWith("match-analysis:model:llama3.2:resume:2:application:4:");
 		// SHA-256 written as hex is always 64 characters, however long the text is
 		assertThat(key.substring(key.lastIndexOf(':') + 1)).hasSize(64).matches("[0-9a-f]+");
 		assertThat(key).doesNotContain("Java developer");
@@ -60,12 +64,13 @@ class MatchAnalysisCacheTest {
 
 	@Test
 	void keyIsTheSameForTheSameInputAndDifferentWhenAnyPartChanges() {
-		String key = MatchAnalysisCache.key(2L, 4L, "Java developer");
+		String key = MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer");
 
-		assertThat(MatchAnalysisCache.key(2L, 4L, "Java developer")).isEqualTo(key);
-		assertThat(MatchAnalysisCache.key(3L, 4L, "Java developer")).isNotEqualTo(key);
-		assertThat(MatchAnalysisCache.key(2L, 5L, "Java developer")).isNotEqualTo(key);
-		assertThat(MatchAnalysisCache.key(2L, 4L, "Java developer!")).isNotEqualTo(key);
+		assertThat(MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer")).isEqualTo(key);
+		assertThat(MatchAnalysisCache.key("qwen2.5:7b", 2L, 4L, "Java developer")).isNotEqualTo(key);
+		assertThat(MatchAnalysisCache.key("llama3.2", 3L, 4L, "Java developer")).isNotEqualTo(key);
+		assertThat(MatchAnalysisCache.key("llama3.2", 2L, 5L, "Java developer")).isNotEqualTo(key);
+		assertThat(MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer!")).isNotEqualTo(key);
 	}
 
 	@Test
@@ -73,7 +78,7 @@ class MatchAnalysisCacheTest {
 		cache.put(2L, 4L, "Java developer", ANALYSIS);
 
 		ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
-		verify(valueOperations).set(eq(MatchAnalysisCache.key(2L, 4L, "Java developer")), json.capture(),
+		verify(valueOperations).set(eq(MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer")), json.capture(),
 				eq(Duration.ofHours(24)));
 		assertThat(json.getValue()).contains("\"matchScore\":80");
 	}
@@ -83,9 +88,23 @@ class MatchAnalysisCacheTest {
 		ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
 		cache.put(2L, 4L, "Java developer", ANALYSIS);
 		verify(valueOperations).set(anyString(), json.capture(), any(Duration.class));
-		when(valueOperations.get(MatchAnalysisCache.key(2L, 4L, "Java developer"))).thenReturn(json.getValue());
+		when(valueOperations.get(MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer"))).thenReturn(json.getValue());
 
 		assertThat(cache.get(2L, 4L, "Java developer")).contains(ANALYSIS);
+	}
+
+	@Test
+	void resultCachedForOneModelIsNotReturnedForAnotherModel() {
+		ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+		cache.put(2L, 4L, "Java developer", ANALYSIS);
+		verify(valueOperations).set(anyString(), json.capture(), any(Duration.class));
+		when(valueOperations.get(MatchAnalysisCache.key("llama3.2", 2L, 4L, "Java developer")))
+			.thenReturn(json.getValue());
+		assertThat(cache.get(2L, 4L, "Java developer")).isPresent();
+
+		when(aiService.modelName()).thenReturn("qwen2.5:7b");
+
+		assertThat(cache.get(2L, 4L, "Java developer")).isEmpty();
 	}
 
 	@Test

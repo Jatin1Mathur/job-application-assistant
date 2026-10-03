@@ -71,7 +71,7 @@ class JobApplicationControllerTest {
 						"""))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.status").value(400))
-			.andExpect(jsonPath("$.message").value("companyName is required; jobTitle is required"));
+			.andExpect(jsonPath("$.message").value("companyName is required; jobDescription is required; jobTitle is required"));
 
 		verifyNoInteractions(jobApplicationService);
 	}
@@ -237,15 +237,16 @@ class JobApplicationControllerTest {
 	}
 
 	@Test
-	void createAllowsLeavingOutTheJobDescription() throws Exception {
-		when(jobApplicationService.create(any())).thenReturn(response(1L, ApplicationStatus.SAVED));
-
+	void createReturns400WhenJobDescriptionIsMissing() throws Exception {
 		mockMvc
 			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
 				.content("""
 						{"companyName": "Acme", "jobTitle": "Java Developer"}
 						"""))
-			.andExpect(status().isCreated());
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("jobDescription is required"));
+
+		verifyNoInteractions(jobApplicationService);
 	}
 
 	@Test

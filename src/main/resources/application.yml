@@ -17,11 +17,11 @@ spring:
     hibernate:
       ddl-auto: validate
 
-  # Redis container from docker-compose.yml
+  # Redis container from docker-compose.yml (host port 6380, see the comment there)
   data:
     redis:
       host: localhost
-      port: 6379
+      port: 6380
 
   # Resume uploads: PDFs up to 5 MB (the request itself may be slightly bigger than the file)
   servlet:

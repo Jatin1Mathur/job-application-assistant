@@ -44,6 +44,11 @@ class OllamaAiServiceTest {
 	}
 
 	@Test
+	void modelNameReturnsTheConfiguredModel() {
+		assertThat(aiService.modelName()).isEqualTo("llama3.2");
+	}
+
+	@Test
 	void analyzeMatchSendsPromptInJsonModeAndParsesTheAnswer() {
 		ollama.expect(requestTo(CHAT_URL))
 			.andExpect(method(HttpMethod.POST))
