@@ -82,6 +82,11 @@ public class OllamaAiService implements AiService {
 	}
 
 	@Override
+	public String modelName() {
+		return model;
+	}
+
+	@Override
 	public MatchAnalysisResponse analyzeMatch(String resumeText, String jobDescription) {
 		String userPrompt = """
 				RESUME:

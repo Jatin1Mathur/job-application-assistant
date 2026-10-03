@@ -16,7 +16,8 @@ services:
     image: redis:7
     container_name: jobassistant-redis
     ports:
-      - "6379:6379"
+      # Host port 6380, so it does not clash with another Redis already running on 6379
+      - "6380:6379"
     restart: unless-stopped
 
 volumes:

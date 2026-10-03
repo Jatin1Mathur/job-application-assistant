@@ -1,6 +1,7 @@
 package com.jatin.jobassistant.controller;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -16,6 +17,7 @@ import com.jatin.jobassistant.dto.ApplicationResponse;
 import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.CreateApplicationRequest;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
+import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.dto.UpdateStatusRequest;
 import com.jatin.jobassistant.entity.ApplicationStatus;
@@ -57,10 +59,12 @@ public class JobApplicationController {
 		return jobApplicationService.updateStatus(id, request.status());
 	}
 
-	// Asks the AI how well the resume fits this job and stores the score on the application
+	// Asks the AI how well the resume fits this job and stores the score on the application.
+	// The X-Cache header says whether the answer came from Redis (HIT) or from a fresh AI call (MISS)
 	@PostMapping("/{id}/analyze")
-	public MatchAnalysisResponse analyze(@PathVariable Long id, @RequestParam Long resumeId) {
-		return jobApplicationService.analyze(id, resumeId);
+	public ResponseEntity<MatchAnalysisResponse> analyze(@PathVariable Long id, @RequestParam Long resumeId) {
+		MatchAnalysisResult result = jobApplicationService.analyze(id, resumeId);
+		return ResponseEntity.ok().header("X-Cache", result.fromCache() ? "HIT" : "MISS").body(result.analysis());
 	}
 
 	// Asks the AI to write a cover letter from the resume and stores it on the application
