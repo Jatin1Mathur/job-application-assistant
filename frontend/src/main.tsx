@@ -18,7 +18,8 @@ createRoot(document.getElementById('root')!).render(
             <App />
           </AuthProvider>
         </BrowserRouter>
-        <Toaster position="bottom-right" richColors closeButton />
+        {/* On a phone the messages sit above the bottom navigation bar */}
+        <Toaster position="bottom-right" richColors closeButton mobileOffset={{ bottom: 76 }} />
       </MotionConfig>
     </ThemeProvider>
   </StrictMode>,

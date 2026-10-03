@@ -19,9 +19,9 @@ export default function EmptyState({
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.25 }}
-      className="flex flex-col items-center rounded-2xl border border-dashed bg-card/50 px-6 py-14 text-center"
+      className="flex flex-col items-center rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center"
     >
-      <span className="flex size-14 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
+      <span className="flex size-14 items-center justify-center rounded-xl bg-accent text-accent-foreground">
         <Icon className="size-7" strokeWidth={1.75} />
       </span>
       <h2 className="mt-4 text-base font-semibold">{title}</h2>

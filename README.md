@@ -30,9 +30,16 @@ What you can do in the app:
 - **Dashboard** as a card list or a **Kanban board** with drag and drop between status columns.
 - **Insights** with charts: applications by status, average match score, and the skills missing most often.
 - **Application page**: AI match analysis, cover letter, and a **Compare** tab that shows the resume and the job description side by side with matching and missing skills marked.
+- **3D scenes** (three.js, loaded only where they are shown): a skill galaxy on the landing page, a score orb on the application page and a skill universe on the insights page. Each has a static fallback for browsers without WebGL and for reduced motion.
 - **Command palette** with `Cmd+K` / `Ctrl+K`, and keyboard shortcuts (press `?` to see them).
 
 The dev server passes every `/api` call on to the backend on port 8080 (see `frontend/vite.config.ts`), so the backend needs no CORS settings.
+
+## Design
+
+- [DESIGN.md](DESIGN.md) is the design system: colors, typography, spacing, components, and do's and don'ts.
+- [docs/design-decisions.md](docs/design-decisions.md) explains the audit, what was changed and why, and the trade-offs.
+- [docs/screenshots](docs/screenshots) has every page before and after the redesign, in desktop and phone size, light and dark mode.
 
 ## Testing with Postman
 
