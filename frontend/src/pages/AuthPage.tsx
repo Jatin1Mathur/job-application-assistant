@@ -1,4 +1,4 @@
-import { FileText, LayoutDashboard, Loader2, Target } from 'lucide-react'
+import { ArrowLeft, FileText, LayoutDashboard, Loader2, Target } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
@@ -78,7 +78,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [loading, setLoading] = useState(false)
 
   const isLogin = mode === 'login'
-  const cameFrom = (location.state as { from?: string } | null)?.from ?? '/'
+  const cameFrom = (location.state as { from?: string } | null)?.from ?? '/dashboard'
 
   if (token) {
     return <Navigate to={cameFrom} replace />
@@ -103,7 +103,10 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     <div className="flex min-h-screen">
       <PitchPanel />
       <div className="relative flex w-full flex-col items-center justify-center px-5 py-12 lg:w-1/2">
-        <div className="absolute right-4 top-4">
+        <div className="absolute inset-x-4 top-4 flex items-center justify-between">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="size-4" /> Home
+          </Link>
           <ThemeToggle />
         </div>
         <div className="w-full max-w-sm">

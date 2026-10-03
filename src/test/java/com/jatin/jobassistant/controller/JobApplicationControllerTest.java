@@ -32,6 +32,7 @@ import com.jatin.jobassistant.dto.CoverLetterResponse;
 import com.jatin.jobassistant.dto.MatchAnalysisResponse;
 import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
+import com.jatin.jobassistant.dto.SavedAnalysisResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.security.JwtService;
 import com.jatin.jobassistant.security.SecurityConfig;
@@ -195,6 +196,24 @@ class JobApplicationControllerTest {
 		mockMvc.perform(get("/api/applications/1").header("Authorization", token))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.jobTitle").value("Java Developer"));
+	}
+
+	@Test
+	void getByIdIncludesTheSavedAnalysis() throws Exception {
+		SavedAnalysisResponse analysis = new SavedAnalysisResponse(80, List.of("Java"), List.of("Kubernetes"),
+				List.of("tip 1", "tip 2", "tip 3"), "llama3.2", Instant.parse("2026-10-03T10:00:00Z"), 2L);
+		when(jobApplicationService.getById(USER_ID, 1L)).thenReturn(new ApplicationResponse(1L, "Acme",
+				"Java Developer", JOB_DESCRIPTION, ApplicationStatus.SAVED, 80, null, Instant.now(), Instant.now(),
+				analysis));
+
+		mockMvc.perform(get("/api/applications/1").header("Authorization", token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.analysis.matchScore").value(80))
+			.andExpect(jsonPath("$.analysis.matchingSkills[0]").value("Java"))
+			.andExpect(jsonPath("$.analysis.missingSkills[0]").value("Kubernetes"))
+			.andExpect(jsonPath("$.analysis.resumeTips.length()").value(3))
+			.andExpect(jsonPath("$.analysis.modelName").value("llama3.2"))
+			.andExpect(jsonPath("$.analysis.analyzedAt").value("2026-10-03T10:00:00Z"));
 	}
 
 	@Test
@@ -423,7 +442,7 @@ class JobApplicationControllerTest {
 
 	private ApplicationResponse response(Long id, ApplicationStatus status) {
 		return new ApplicationResponse(id, "Acme", "Java Developer", "Build APIs", status, null, null, Instant.now(),
-				Instant.now());
+				Instant.now(), null);
 	}
 
 }

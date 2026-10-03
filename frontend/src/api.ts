@@ -4,6 +4,28 @@ export type ApplicationStatus = 'SAVED' | 'APPLIED' | 'INTERVIEW' | 'OFFER' | 'R
 
 export const STATUSES: ApplicationStatus[] = ['SAVED', 'APPLIED', 'INTERVIEW', 'OFFER', 'REJECTED']
 
+// The full AI analysis the backend stores for an application
+export interface SavedAnalysis extends MatchAnalysis {
+  modelName: string
+  analyzedAt: string
+  resumeId: number | null
+}
+
+export interface Insights {
+  totalApplications: number
+  applicationsByStatus: Record<ApplicationStatus, number>
+  analyzedApplications: number
+  averageMatchScore: number | null
+  topMissingSkills: { skill: string; applications: number }[]
+}
+
+export interface Resume {
+  id: number
+  fileName: string
+  createdAt: string
+  extractedText: string
+}
+
 export interface Application {
   id: number
   companyName: string
@@ -14,6 +36,7 @@ export interface Application {
   coverLetter: string | null
   createdAt: string
   updatedAt: string
+  analysis: SavedAnalysis | null
 }
 
 export interface Page<T> {
@@ -123,6 +146,10 @@ export const api = {
     request<LoginResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
   listResumes: () => request<ResumeSummary[]>('/resumes'),
+
+  getResume: (id: number) => request<Resume>(`/resumes/${id}`),
+
+  getInsights: () => request<Insights>('/insights'),
 
   uploadResume: (file: File) => {
     const form = new FormData()

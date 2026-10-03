@@ -1,6 +1,10 @@
 package com.jatin.jobassistant.service;
 
+import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -16,8 +20,10 @@ import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.entity.ApplicationStatus;
 import com.jatin.jobassistant.entity.JobApplication;
+import com.jatin.jobassistant.entity.MatchAnalysis;
 import com.jatin.jobassistant.entity.Resume;
 import com.jatin.jobassistant.repository.JobApplicationRepository;
+import com.jatin.jobassistant.repository.MatchAnalysisRepository;
 import com.jatin.jobassistant.repository.ResumeRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -37,6 +43,8 @@ public class JobApplicationService {
 
 	private final MatchAnalysisCache matchAnalysisCache;
 
+	private final MatchAnalysisRepository matchAnalysisRepository;
+
 	public ApplicationResponse create(Long userId, CreateApplicationRequest request) {
 		JobApplication application = new JobApplication();
 		application.setUserId(userId);
@@ -44,7 +52,7 @@ public class JobApplicationService {
 		application.setJobTitle(request.jobTitle().strip());
 		application.setJobDescription(request.jobDescription().strip());
 		application.setStatus(ApplicationStatus.SAVED);
-		return ApplicationResponse.from(jobApplicationRepository.save(application));
+		return ApplicationResponse.from(jobApplicationRepository.save(application), null);
 	}
 
 	public PageResponse<ApplicationResponse> list(Long userId, ApplicationStatus status, int page, int size) {
@@ -52,17 +60,23 @@ public class JobApplicationService {
 		Page<JobApplication> applications = status == null
 				? jobApplicationRepository.findByUserId(userId, pageable)
 				: jobApplicationRepository.findByUserIdAndStatus(userId, status, pageable);
-		return PageResponse.from(applications.map(ApplicationResponse::from));
+		// Load the saved analyses of the whole page with one query instead of one query per application
+		Map<Long, MatchAnalysis> analyses = matchAnalysisRepository
+			.findByApplicationIdIn(applications.map(JobApplication::getId).getContent())
+			.stream()
+			.collect(Collectors.toMap(MatchAnalysis::getApplicationId, Function.identity()));
+		return PageResponse
+			.from(applications.map(application -> ApplicationResponse.from(application, analyses.get(application.getId()))));
 	}
 
 	public ApplicationResponse getById(Long userId, Long id) {
-		return ApplicationResponse.from(find(userId, id));
+		return withAnalysis(find(userId, id));
 	}
 
 	public ApplicationResponse updateStatus(Long userId, Long id, ApplicationStatus status) {
 		JobApplication application = find(userId, id);
 		application.setStatus(status);
-		return ApplicationResponse.from(jobApplicationRepository.save(application));
+		return withAnalysis(jobApplicationRepository.save(application));
 	}
 
 	public MatchAnalysisResult analyze(Long userId, Long id, Long resumeId) {
@@ -80,7 +94,32 @@ public class JobApplicationService {
 
 		application.setMatchScore(analysis.matchScore());
 		jobApplicationRepository.save(application);
+		saveAnalysis(id, resumeId, analysis, cached.isPresent());
 		return new MatchAnalysisResult(analysis, cached.isPresent());
+	}
+
+	// Keeps the full analysis (not only the score) in the database, one row per application
+	private void saveAnalysis(Long applicationId, Long resumeId, MatchAnalysisResponse analysis, boolean fromCache) {
+		Optional<MatchAnalysis> existing = matchAnalysisRepository.findByApplicationId(applicationId);
+		// A cached answer for the same resume is the one already stored; keep its original date
+		if (fromCache && existing.isPresent() && resumeId.equals(existing.get().getResumeId())) {
+			return;
+		}
+		MatchAnalysis saved = existing.orElseGet(MatchAnalysis::new);
+		saved.setApplicationId(applicationId);
+		saved.setResumeId(resumeId);
+		saved.setMatchScore(analysis.matchScore());
+		saved.setMatchingSkills(analysis.matchingSkills());
+		saved.setMissingSkills(analysis.missingSkills());
+		saved.setResumeTips(analysis.resumeTips());
+		saved.setModelName(aiService.modelName());
+		saved.setAnalyzedAt(Instant.now());
+		matchAnalysisRepository.save(saved);
+	}
+
+	private ApplicationResponse withAnalysis(JobApplication application) {
+		return ApplicationResponse.from(application,
+				matchAnalysisRepository.findByApplicationId(application.getId()).orElse(null));
 	}
 
 	public CoverLetterResponse generateCoverLetter(Long userId, Long id, Long resumeId) {

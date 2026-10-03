@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, Copy, FileText, Lightbulb, Loader2, PenLine, Sparkles, Trash2, Zap } from 'lucide-react'
+import { ArrowLeft, Check, Columns2, Copy, FileText, Lightbulb, Loader2, PenLine, Sparkles, Trash2, Zap } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { api, errorMessage, STATUSES } from '../api.ts'
 import type { Application, ApplicationStatus, MatchAnalysis, ResumeSummary } from '../api.ts'
 import AiSteps from '../components/AiSteps.tsx'
+import HighlightedText from '../components/HighlightedText.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import PageTransition from '../components/PageTransition.tsx'
@@ -24,24 +25,13 @@ import {
 } from '../components/ui/dialog.tsx'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.tsx'
 import { formatDate, scoreTone } from '../lib/format.ts'
 import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
 
 const ANALYZE_STEPS = ['Reading your resume…', 'Comparing skills…', 'Writing tips…']
 const LETTER_STEPS = ['Reading your resume…', 'Studying the job posting…', 'Writing your cover letter…']
-
-// The backend only stores the score. The skills and tips of the last analysis are remembered in the browser
-const analysisKey = (applicationId: number) => `job-assistant.analysis.${applicationId}`
-
-function loadSavedAnalysis(applicationId: number): MatchAnalysis | null {
-  try {
-    const saved = localStorage.getItem(analysisKey(applicationId))
-    return saved ? (JSON.parse(saved) as MatchAnalysis) : null
-  } catch {
-    return null
-  }
-}
 
 const section = 'rounded-2xl border bg-card p-6 shadow-xs'
 
@@ -100,7 +90,11 @@ export default function ApplicationDetailPage() {
   const [resumeId, setResumeId] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const [analysis, setAnalysis] = useState<MatchAnalysis | null>(() => loadSavedAnalysis(id))
+  // The full analysis is stored by the backend and comes with the application
+  const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null)
+  // The resume text for the compare view; loaded only when that tab is opened
+  const [resumeText, setResumeText] = useState<{ resumeId: number; text: string } | null>(null)
+  const [resumeTextError, setResumeTextError] = useState<string | null>(null)
   // Changes after every analysis, so the ring and the tags animate again
   const [analysisRun, setAnalysisRun] = useState(0)
   const [analysisFromCache, setAnalysisFromCache] = useState<boolean | null>(null)
@@ -118,8 +112,11 @@ export default function ApplicationDetailPage() {
     Promise.all([api.getApplication(id), api.listResumes()])
       .then(([loadedApplication, loadedResumes]) => {
         setApplication(loadedApplication)
+        setAnalysis(loadedApplication.analysis)
         setResumes(loadedResumes)
-        setResumeId(loadedResumes[0]?.id ?? null)
+        // Start with the resume of the last analysis, if it still exists; otherwise the newest one
+        const analyzedResume = loadedResumes.find((resume) => resume.id === loadedApplication.analysis?.resumeId)
+        setResumeId(analyzedResume?.id ?? loadedResumes[0]?.id ?? null)
       })
       .catch((err) => setLoadError(errorMessage(err)))
   }, [id])
@@ -133,8 +130,8 @@ export default function ApplicationDetailPage() {
       setAnalysis(result.analysis)
       setAnalysisFromCache(result.cached)
       setAnalysisRun((run) => run + 1)
-      localStorage.setItem(analysisKey(id), JSON.stringify(result.analysis))
-      setApplication((current) => current && { ...current, matchScore: result.analysis.matchScore })
+      // Load the application again to get the stored analysis with its date and model name
+      setApplication(await api.getApplication(id))
       toast.success(`Match score: ${result.analysis.matchScore} out of 100`, {
         description: result.cached ? 'Answered instantly from the cache.' : 'Fresh analysis from the AI.',
       })
@@ -186,13 +183,23 @@ export default function ApplicationDetailPage() {
     }
   }
 
+  // The compare view shows the text of the chosen resume. It is fetched the first time the tab is opened
+  function loadResumeText() {
+    if (resumeId === null || resumeText?.resumeId === resumeId) return
+    setResumeText(null)
+    setResumeTextError(null)
+    api
+      .getResume(resumeId)
+      .then((resume) => setResumeText({ resumeId: resume.id, text: resume.extractedText }))
+      .catch((err) => setResumeTextError(errorMessage(err)))
+  }
+
   async function deleteApplication() {
     setDeleting(true)
     try {
       await api.deleteApplication(id)
-      localStorage.removeItem(analysisKey(id))
       toast.success('Application deleted')
-      navigate('/')
+      navigate('/dashboard')
     } catch (err) {
       toast.error('Could not delete the application', { description: errorMessage(err) })
       setDeleting(false)
@@ -204,7 +211,7 @@ export default function ApplicationDetailPage() {
       <PageTransition className="mx-auto max-w-2xl space-y-4">
         <ErrorAlert message={loadError} />
         <Button asChild variant="outline" size="lg">
-          <Link to="/">
+          <Link to="/dashboard">
             <ArrowLeft /> Back to applications
           </Link>
         </Button>
@@ -226,7 +233,7 @@ export default function ApplicationDetailPage() {
 
   return (
     <PageTransition>
-      <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+      <Link to="/dashboard" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> Back to applications
       </Link>
 
@@ -286,7 +293,18 @@ export default function ApplicationDetailPage() {
         </div>
       </div>
 
-      <motion.div variants={staggerList} initial="hidden" animate="show" className="mt-6 grid gap-6 lg:grid-cols-5">
+      <Tabs defaultValue="overview" className="mt-6" onValueChange={(tab) => tab === 'compare' && loadResumeText()}>
+        <TabsList>
+          <TabsTrigger value="overview">
+            <Sparkles /> Overview
+          </TabsTrigger>
+          <TabsTrigger value="compare">
+            <Columns2 /> Compare
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+      <motion.div variants={staggerList} initial="hidden" animate="show" className="mt-4 grid gap-6 lg:grid-cols-5">
         <div className="min-w-0 space-y-6 lg:col-span-3">
           {/* Which resume the AI should use */}
           <motion.section variants={staggerItem} className={section}>
@@ -376,8 +394,14 @@ export default function ApplicationDetailPage() {
                   </div>
                 </div>
 
+                {application.analysis && (
+                  <p className="mt-4 text-xs text-muted-foreground" data-testid="analysis-meta">
+                    Analyzed on {formatDate(application.analysis.analyzedAt)} with {application.analysis.modelName}
+                  </p>
+                )}
+
                 {analysis ? (
-                  <div className="mt-6 space-y-5 border-t pt-5">
+                  <div className="mt-5 space-y-5 border-t pt-5">
                     <SkillTags title="Matching skills" skills={analysis.matchingSkills} kind="matching" />
                     <SkillTags title="Missing skills" skills={analysis.missingSkills} kind="missing" />
                     <div>
@@ -485,6 +509,71 @@ export default function ApplicationDetailPage() {
           </section>
         </motion.aside>
       </motion.div>
+        </TabsContent>
+
+        {/* Resume text and job description next to each other, with the skills from the analysis marked */}
+        <TabsContent value="compare">
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground" data-testid="compare-legend">
+            {analysis ? (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-3 rounded bg-emerald-500/30 ring-1 ring-emerald-500/40" /> Matching skill
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-3 rounded bg-rose-500/30 ring-1 ring-rose-500/40" /> Missing skill
+                </span>
+                <span>A skill is marked where its exact words appear in the text.</span>
+              </>
+            ) : (
+              <span>Run "Analyze match" on the Overview tab to see matching and missing skills marked here.</span>
+            )}
+          </div>
+          <div className="mt-3 grid gap-6 lg:grid-cols-2">
+            <section className={`${section} min-w-0`} data-testid="compare-resume">
+              <h2 className="flex items-center gap-2 text-base font-semibold">
+                <FileText className="size-4 text-muted-foreground" /> Your resume
+              </h2>
+              {noResume ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  No resume yet.{' '}
+                  <Link to="/resumes" className="font-semibold text-primary hover:underline">
+                    Upload one
+                  </Link>{' '}
+                  to compare it with this job.
+                </p>
+              ) : resumeTextError ? (
+                <div className="mt-3">
+                  <ErrorAlert message={resumeTextError} />
+                </div>
+              ) : resumeText === null ? (
+                <div className="mt-4 space-y-2.5" aria-busy="true" aria-label="Loading resume text">
+                  {[0, 1, 2, 3, 4, 5].map((line) => (
+                    <Skeleton key={line} className="h-3.5" style={{ width: `${95 - line * 9}%` }} />
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 max-h-[36rem] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/85">
+                  <HighlightedText
+                    text={resumeText.text}
+                    matching={analysis?.matchingSkills ?? []}
+                    missing={analysis?.missingSkills ?? []}
+                  />
+                </p>
+              )}
+            </section>
+            <section className={`${section} min-w-0`} data-testid="compare-job">
+              <h2 className="text-base font-semibold">Job description</h2>
+              <p className="mt-3 max-h-[36rem] overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/85">
+                <HighlightedText
+                  text={application.jobDescription}
+                  matching={analysis?.matchingSkills ?? []}
+                  missing={analysis?.missingSkills ?? []}
+                />
+              </p>
+            </section>
+          </div>
+        </TabsContent>
+      </Tabs>
     </PageTransition>
   )
 }

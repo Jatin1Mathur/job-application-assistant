@@ -24,6 +24,14 @@ The frontend is a React + Vite + TypeScript app with Tailwind CSS in the `fronte
    ```
 3. Open http://localhost:5173 in your browser.
 
+What you can do in the app:
+
+- **Landing page** at `/` for visitors; logged-in users go straight to the dashboard.
+- **Dashboard** as a card list or a **Kanban board** with drag and drop between status columns.
+- **Insights** with charts: applications by status, average match score, and the skills missing most often.
+- **Application page**: AI match analysis, cover letter, and a **Compare** tab that shows the resume and the job description side by side with matching and missing skills marked.
+- **Command palette** with `Cmd+K` / `Ctrl+K`, and keyboard shortcuts (press `?` to see them).
+
 The dev server passes every `/api` call on to the backend on port 8080 (see `frontend/vite.config.ts`), so the backend needs no CORS settings.
 
 ## Testing with Postman

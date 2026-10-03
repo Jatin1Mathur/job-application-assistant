@@ -340,7 +340,7 @@
                 "{{applicationId}}"
               ]
             },
-            "description": "Returns one application, including matchScore and coverLetter once the AI requests have been run. Returns 404 if it does not exist or belongs to another user."
+            "description": "Returns one application, including matchScore, coverLetter and analysis (the full saved AI analysis: matchingSkills, missingSkills, resumeTips, modelName, analyzedAt, resumeId) once the AI requests have been run. Returns 404 if it does not exist or belongs to another user."
           },
           "response": []
         },
@@ -455,6 +455,30 @@
               ]
             },
             "description": "Asks the AI to write a cover letter (max 300 words) using only facts from the resume. Returns applicationId and coverLetter, and saves the letter on the application. Needs Ollama running and can take several seconds. Always read the letter before sending it."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Insights",
+      "item": [
+        {
+          "name": "Get insights",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/insights",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "insights"
+              ]
+            },
+            "description": "Numbers about your applications: totalApplications, applicationsByStatus (a count for every status), analyzedApplications, averageMatchScore (null until something is analyzed) and topMissingSkills (the 10 skills the AI listed as missing most often, with the number of applications)."
           },
           "response": []
         }
