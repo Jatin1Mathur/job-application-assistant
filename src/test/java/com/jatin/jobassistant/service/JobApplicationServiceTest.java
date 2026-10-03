@@ -67,7 +67,7 @@ class JobApplicationServiceTest {
 		});
 
 		ApplicationResponse response = jobApplicationService
-			.create(new CreateApplicationRequest(" Acme ", "Java Developer", JOB_DESCRIPTION));
+			.create(new CreateApplicationRequest(" Acme ", "Java Developer", "  " + JOB_DESCRIPTION + "\n"));
 
 		assertThat(response.id()).isEqualTo(1L);
 		assertThat(response.companyName()).isEqualTo("Acme");

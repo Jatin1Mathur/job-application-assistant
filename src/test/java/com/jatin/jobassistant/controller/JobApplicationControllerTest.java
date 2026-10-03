@@ -237,6 +237,46 @@ class JobApplicationControllerTest {
 	}
 
 	@Test
+	void createReturns400WhenJobDescriptionIsOnlySpaces() throws Exception {
+		mockMvc
+			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"companyName": "Acme", "jobTitle": "Java Developer", "jobDescription": "%s"}
+						""".formatted(" ".repeat(150))))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("jobDescription must be at least 100 characters"));
+
+		verifyNoInteractions(jobApplicationService);
+	}
+
+	@Test
+	void createDoesNotCountSpacesAroundTheJobDescription() throws Exception {
+		String padded = " ".repeat(50) + "x".repeat(99) + " ".repeat(50);
+
+		mockMvc
+			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"companyName": "Acme", "jobTitle": "Java Developer", "jobDescription": "%s"}
+						""".formatted(padded)))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("jobDescription must be at least 100 characters"));
+
+		verifyNoInteractions(jobApplicationService);
+	}
+
+	@Test
+	void createAcceptsJobDescriptionOfExactly100Characters() throws Exception {
+		when(jobApplicationService.create(any())).thenReturn(response(1L, ApplicationStatus.SAVED));
+
+		mockMvc
+			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"companyName": "Acme", "jobTitle": "Java Developer", "jobDescription": "%s"}
+						""".formatted("x".repeat(100))))
+			.andExpect(status().isCreated());
+	}
+
+	@Test
 	void createReturns400WhenJobDescriptionIsMissing() throws Exception {
 		mockMvc
 			.perform(post("/api/applications").contentType(MediaType.APPLICATION_JSON)

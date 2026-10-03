@@ -41,7 +41,7 @@ public class JobApplicationService {
 		JobApplication application = new JobApplication();
 		application.setCompanyName(request.companyName().strip());
 		application.setJobTitle(request.jobTitle().strip());
-		application.setJobDescription(request.jobDescription());
+		application.setJobDescription(request.jobDescription().strip());
 		application.setStatus(ApplicationStatus.SAVED);
 		return ApplicationResponse.from(jobApplicationRepository.save(application));
 	}
@@ -103,7 +103,7 @@ public class JobApplicationService {
 		if (isBlank(jobDescription)) {
 			throw new InvalidAnalysisRequestException("This application has no job description for the AI to use");
 		}
-		if (jobDescription.strip().length() < CreateApplicationRequest.MIN_JOB_DESCRIPTION_LENGTH) {
+		if (!CreateApplicationRequest.isLongEnough(jobDescription)) {
 			throw new InvalidAnalysisRequestException("The job description is too short ("
 					+ jobDescription.strip().length() + " characters). The AI needs at least "
 					+ CreateApplicationRequest.MIN_JOB_DESCRIPTION_LENGTH + " characters");
