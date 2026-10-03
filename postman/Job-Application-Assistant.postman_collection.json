@@ -1,0 +1,445 @@
+{
+  "info": {
+    "name": "Job Application Assistant",
+    "description": "Requests for the Job Application Assistant API.\n\nRun them in this order the first time: Register, Login, Upload resume, Create application. Login saves the token, Upload resume saves resumeId, and Create application saves applicationId as collection variables, so the other requests work without copying anything by hand.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "resumeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "applicationId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Checks that the app is running. Returns the text OK. No login needed.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Creates a new account. The email must be valid and the password must be 8 to 72 characters. Returns 201 with id, email and createdAt, or 409 if the email is already registered. No login needed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jatin@example.com\",\n  \"password\": \"change-this-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save the token so all other requests are sent as this user",
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set(\"token\", pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Logs in with email and password. Returns token, tokenType and expiresInSeconds. The script saves the token in the collection variable \"token\", which every other request sends as a Bearer token. The token is valid for 24 hours. No login needed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jatin@example.com\",\n  \"password\": \"change-this-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Resumes",
+      "item": [
+        {
+          "name": "Upload resume",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save the new resume's id for Get resume, Analyze match and Generate cover letter",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"resumeId\", pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/resumes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "resumes"
+              ]
+            },
+            "description": "Uploads a PDF resume (form-data, field \"file\", max 5 MB) and extracts its text. Choose your PDF in the Body tab before sending. Returns 201 with id, fileName, createdAt and textPreview (the first 200 characters). The script saves the id in the collection variable \"resumeId\".",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Your resume as a PDF, max 5 MB"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get resume",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/resumes/{{resumeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "resumes",
+                "{{resumeId}}"
+              ]
+            },
+            "description": "Returns the full resume: id, fileName, createdAt and extractedText. Returns 404 if the resume does not exist or belongs to another user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Create application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Save the new application's id for the other Applications and AI requests",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"applicationId\", pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications"
+              ]
+            },
+            "description": "Creates a job application with status SAVED. companyName, jobTitle and jobDescription are required, and jobDescription must be at least 100 characters. Returns 201 with the new application. The script saves its id in the collection variable \"applicationId\".",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"TechNova\",\n  \"jobTitle\": \"Java Backend Developer\",\n  \"jobDescription\": \"We are looking for a Java Backend Developer to build and maintain REST APIs with Spring Boot. Required: Java 17 or newer, Spring Boot, PostgreSQL, JPA/Hibernate, Docker, Git and unit testing with JUnit. Nice to have: Redis, Kubernetes, CI/CD pipelines and experience with microservices.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List applications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications?page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Lists your applications, newest first, one page at a time. page starts at 0 and size is 1 to 100. Add status=SAVED, APPLIED, INTERVIEW, OFFER or REJECTED to filter. Returns content, page, size, totalElements and totalPages."
+          },
+          "response": []
+        },
+        {
+          "name": "Get application",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "Returns one application, including matchScore and coverLetter once the AI requests have been run. Returns 404 if it does not exist or belongs to another user."
+          },
+          "response": []
+        },
+        {
+          "name": "Update status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/{{applicationId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "{{applicationId}}",
+                "status"
+              ]
+            },
+            "description": "Changes only the status of an application. Allowed values: SAVED, APPLIED, INTERVIEW, OFFER, REJECTED. Returns the updated application.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"APPLIED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete application",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "Deletes the application. Returns 204 with no body. After this, run Create application again before using the other Applications and AI requests."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "AI",
+      "item": [
+        {
+          "name": "Analyze match",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/{{applicationId}}/analyze?resumeId={{resumeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "{{applicationId}}",
+                "analyze"
+              ],
+              "query": [
+                {
+                  "key": "resumeId",
+                  "value": "{{resumeId}}"
+                }
+              ]
+            },
+            "description": "Asks the AI how well the resume fits the job. Returns matchScore (0-100), matchingSkills, missingSkills and 3 resumeTips, and saves matchScore on the application. Needs Ollama running; the first call can take several seconds. The result is cached for 24 hours: the X-Cache response header is MISS for a fresh AI answer and HIT for a cached one."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate cover letter",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/applications/{{applicationId}}/cover-letter?resumeId={{resumeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "applications",
+                "{{applicationId}}",
+                "cover-letter"
+              ],
+              "query": [
+                {
+                  "key": "resumeId",
+                  "value": "{{resumeId}}"
+                }
+              ]
+            },
+            "description": "Asks the AI to write a cover letter (max 300 words) using only facts from the resume. Returns applicationId and coverLetter, and saves the letter on the application. Needs Ollama running and can take several seconds. Always read the letter before sending it."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
