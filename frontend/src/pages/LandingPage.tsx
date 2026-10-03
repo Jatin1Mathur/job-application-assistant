@@ -1,5 +1,6 @@
 import { ArrowRight, BarChart3, Check, FileUp, PenLine, Sparkles, Target } from 'lucide-react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Logo from '../components/Logo.tsx'
 import MotionButton from '../components/MotionButton.tsx'
@@ -32,46 +33,119 @@ const STEPS = [
   { icon: Target, title: 'Get your score and letter', text: 'See how well you fit, what to improve, and generate a cover letter.' },
 ]
 
-// A small, made-up example of the analysis result, so visitors see what they will get
+const EXAMPLES = [
+  { job: 'Backend Developer · Acme GmbH', score: 82, label: 'Strong match', tone: 'text-emerald-700 dark:text-emerald-400', matching: ['Java', 'Spring Boot', 'PostgreSQL', 'Docker'], missing: ['Kubernetes'] },
+  { job: 'Data Engineer · Northwind', score: 61, label: 'Partial match', tone: 'text-amber-700 dark:text-amber-400', matching: ['Python', 'SQL', 'Git'], missing: ['Spark', 'Airflow'] },
+  { job: 'iOS Developer · Lumen Labs', score: 34, label: 'Weak match', tone: 'text-rose-700 dark:text-rose-400', matching: ['Git', 'REST APIs'], missing: ['Swift', 'SwiftUI', 'Xcode'] },
+]
+
+// Made-up examples of the analysis result, so visitors see what they will get.
+// It moves on to the next example every few seconds; with "reduce motion" it stays on the first.
 function PreviewCard() {
+  const reducedMotion = useReducedMotion()
+  const [index, setIndex] = useState(0)
+  const example = EXAMPLES[index]
+
+  useEffect(() => {
+    if (reducedMotion) return
+    const timer = setInterval(() => setIndex((current) => (current + 1) % EXAMPLES.length), 4500)
+    return () => clearInterval(timer)
+  }, [reducedMotion])
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.15, ease: 'easeOut' }}
-      className="w-full max-w-md rounded-3xl border bg-card p-6 shadow-2xl shadow-primary/10"
+      initial={{ opacity: 0, y: 24, rotate: 0 }}
+      animate={{ opacity: 1, y: 0, rotate: 1.5 }}
+      transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
+      className="relative w-full max-w-md rounded-3xl border bg-card p-6 shadow-pop"
       aria-label="Example of a match analysis"
     >
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Example analysis</p>
-      <p className="mt-1 text-base font-semibold">Backend Developer · Acme GmbH</p>
-      <div className="mt-5 flex items-center gap-5">
-        <ScoreRing score={82} />
-        <div>
-          <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">Strong match</p>
-          <p className="mt-1 text-sm text-muted-foreground">Your resume covers most of what this job asks for.</p>
-        </div>
-      </div>
-      <motion.ul variants={staggerList} initial="hidden" animate="show" className="mt-5 flex flex-wrap gap-2">
-        {['Java', 'Spring Boot', 'PostgreSQL', 'Docker'].map((skill) => (
-          <motion.li
-            key={skill}
-            variants={popItem}
-            className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/25 dark:text-emerald-300"
-          >
-            {skill}
-          </motion.li>
-        ))}
-        {['Kubernetes'].map((skill) => (
-          <motion.li
-            key={skill}
-            variants={popItem}
-            className="rounded-full bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300"
-          >
-            {skill}
-          </motion.li>
-        ))}
-      </motion.ul>
+      {/* The key changes with the example, so the old content fades out and the new one animates in */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={example.job}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2 }}
+        >
+          <p className="mt-1 text-base font-semibold">{example.job}</p>
+          <div className="mt-5 flex items-center gap-5">
+            <ScoreRing score={example.score} />
+            <div>
+              <p className={`font-display text-xl font-semibold ${example.tone}`}>{example.label}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {example.matching.length} matching and {example.missing.length} missing skills found.
+              </p>
+            </div>
+          </div>
+          <motion.ul variants={staggerList} initial="hidden" animate="show" className="mt-5 flex min-h-16 flex-wrap content-start gap-2">
+            {example.matching.map((skill) => (
+              <motion.li
+                key={skill}
+                variants={popItem}
+                className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/25 dark:text-emerald-300"
+              >
+                {skill}
+              </motion.li>
+            ))}
+            {example.missing.map((skill) => (
+              <motion.li
+                key={skill}
+                variants={popItem}
+                className="rounded-full bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300"
+              >
+                {skill}
+              </motion.li>
+            ))}
+          </motion.ul>
+        </motion.div>
+      </AnimatePresence>
     </motion.div>
+  )
+}
+
+const FLOATING_SKILLS = [
+  { label: 'Java', className: 'left-[4%] top-[14%]', duration: 7 },
+  { label: 'React', className: 'left-[38%] top-[6%]', duration: 9 },
+  { label: 'Docker', className: 'right-[6%] top-[10%]', duration: 8 },
+  { label: 'SQL', className: 'left-[46%] bottom-[12%]', duration: 10 },
+  { label: 'Python', className: 'left-[2%] bottom-[8%]', duration: 8.5 },
+  { label: 'Kubernetes', className: 'right-[3%] bottom-[6%]', duration: 7.5 },
+]
+
+// The hero background: three soft color blobs that drift slowly (a "gradient mesh"), and a few skill
+// tags floating behind the content. Decorative only, so it is hidden from screen readers.
+function HeroBackground() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <motion.div
+        className="absolute -left-24 -top-32 size-[28rem] rounded-full bg-brand/35 blur-3xl dark:bg-brand/15"
+        animate={{ x: [0, 60, 0], y: [0, 40, 0] }}
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute right-[-8rem] top-10 size-[26rem] rounded-full bg-emerald-400/20 blur-3xl dark:bg-emerald-400/10"
+        animate={{ x: [0, -50, 0], y: [0, 50, 0] }}
+        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute bottom-[-10rem] left-1/3 size-[24rem] rounded-full bg-amber-300/25 blur-3xl dark:bg-amber-300/10"
+        animate={{ x: [0, 40, 0], y: [0, -40, 0] }}
+        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      {FLOATING_SKILLS.map(({ label, className, duration }) => (
+        <motion.span
+          key={label}
+          className={`absolute hidden rounded-full border bg-card/70 px-3 py-1 text-xs font-medium text-muted-foreground/80 backdrop-blur-sm md:block ${className}`}
+          animate={{ y: [0, -12, 0], rotate: [-2, 2, -2] }}
+          transition={{ duration, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {label}
+        </motion.span>
+      ))}
+    </div>
   )
 }
 
@@ -79,7 +153,7 @@ function PreviewCard() {
 export default function LandingPage() {
   return (
     <div className="min-h-screen">
-      <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <header className="relative z-10 mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
         <div className="flex items-center gap-1.5">
           <ThemeToggle />
@@ -92,17 +166,29 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main>
+      <main id="main">
         {/* Hero */}
-        <section className="relative overflow-hidden">
-          <div aria-hidden className="absolute inset-x-0 -top-40 -z-10 h-[32rem] bg-gradient-to-b from-primary/15 via-primary/5 to-transparent blur-2xl" />
+        <section className="relative isolate overflow-hidden">
+          <HeroBackground />
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:py-24">
             <motion.div variants={staggerList} initial="hidden" animate="show">
               <motion.p variants={staggerItem} className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-                <Sparkles className="size-3.5 text-primary" /> Powered by a local AI model, not a cloud AI service.
+                <Sparkles className="size-3.5" /> Powered by a local AI model, not a cloud AI service.
               </motion.p>
-              <motion.h1 variants={staggerItem} className="mt-5 text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-                Apply smarter, <span className="text-primary">not harder.</span>
+              <motion.h1 variants={staggerItem} className="mt-5 text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
+                Apply smarter,{' '}
+                {/* The accent color as a marker stroke behind the words; the text itself stays dark for contrast */}
+                <span className="relative whitespace-nowrap text-brand-foreground">
+                  <motion.span
+                    aria-hidden
+                    className="absolute inset-x-[-0.15em] bottom-[0.08em] top-[0.18em] -z-10 -rotate-1 rounded-md bg-brand"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: 1 }}
+                    transition={{ duration: 0.35, delay: 0.3, ease: 'easeOut' }}
+                    style={{ transformOrigin: 'left' }}
+                  />
+                  not harder.
+                </span>
               </motion.h1>
               <motion.p variants={staggerItem} className="mt-5 max-w-lg text-lg text-muted-foreground">
                 Job Assistant checks how well your resume fits a job, tells you which skills are missing, and writes
@@ -145,7 +231,7 @@ export default function LandingPage() {
             className="mt-10 grid gap-5 md:grid-cols-3"
           >
             {FEATURES.map(({ icon: Icon, title, text }) => (
-              <motion.li key={title} variants={staggerItem} whileHover={{ y: -4 }} className="rounded-2xl border bg-card p-6 shadow-xs">
+              <motion.li key={title} variants={staggerItem} whileHover={{ y: -4 }} className="rounded-2xl border bg-card p-6 shadow-card">
                 <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                   <Icon className="size-5" />
                 </span>
@@ -171,7 +257,7 @@ export default function LandingPage() {
             >
               {STEPS.map(({ icon: Icon, title, text }, index) => (
                 <motion.li key={title} variants={staggerItem} className="flex flex-col items-center text-center">
-                  <span className="relative flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+                  <span className="relative flex size-14 items-center justify-center rounded-2xl bg-brand text-brand-foreground shadow-raised">
                     <Icon className="size-6" />
                     <span className="absolute -right-2 -top-2 flex size-6 items-center justify-center rounded-full border bg-card text-xs font-semibold text-foreground">
                       {index + 1}

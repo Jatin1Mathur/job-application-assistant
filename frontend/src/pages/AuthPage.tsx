@@ -28,13 +28,13 @@ function PitchPanel() {
       {/* Two soft blobs that drift slowly behind the text */}
       <motion.div
         aria-hidden
-        className="absolute -left-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl"
+        className="absolute -left-24 -top-24 size-96 rounded-full bg-brand/25 blur-3xl"
         animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
         transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
       />
       <motion.div
         aria-hidden
-        className="absolute -bottom-32 -right-20 size-[28rem] rounded-full bg-fuchsia-300/15 blur-3xl"
+        className="absolute -bottom-32 -right-20 size-[28rem] rounded-full bg-emerald-300/15 blur-3xl"
         animate={{ x: [0, -30, 0], y: [0, -40, 0] }}
         transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
       />
@@ -43,7 +43,7 @@ function PitchPanel() {
         <Logo light />
       </div>
       <motion.div className="relative" variants={staggerList} initial="hidden" animate="show">
-        <motion.h2 variants={staggerItem} className="max-w-md text-4xl font-semibold leading-tight tracking-tight text-white">
+        <motion.h2 variants={staggerItem} className="max-w-md text-5xl font-semibold leading-[1.05] tracking-tight text-white">
           Apply smarter, not harder.
         </motion.h2>
         <motion.p variants={staggerItem} className="mt-4 max-w-md text-base text-white/75">
@@ -52,7 +52,7 @@ function PitchPanel() {
         <ul className="mt-10 space-y-5">
           {PITCH.map(({ icon: Icon, title, text }) => (
             <motion.li key={title} variants={staggerItem} className="flex gap-4">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/12 text-white ring-1 ring-white/20">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-foreground">
                 <Icon className="size-5" />
               </span>
               <span>
@@ -174,7 +174,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                   to={isLogin ? '/register' : '/login'}
                   state={location.state}
                   onClick={() => setError(null)}
-                  className="font-semibold text-primary hover:underline"
+                  className="font-semibold text-foreground underline decoration-brand decoration-2 underline-offset-4 hover:decoration-foreground"
                 >
                   {isLogin ? 'Create one' : 'Log in'}
                 </Link>

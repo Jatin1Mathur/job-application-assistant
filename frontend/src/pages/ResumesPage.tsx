@@ -110,7 +110,7 @@ export default function ResumesPage() {
                 key={resume.id}
                 layout
                 variants={staggerItem}
-                className="flex items-start gap-4 rounded-2xl border bg-card p-5 shadow-xs"
+                className="flex items-start gap-4 rounded-2xl border bg-card p-5 shadow-card"
               >
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
                   <FileText className="size-5" />

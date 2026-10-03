@@ -28,13 +28,20 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      {/* The first thing a keyboard user reaches: jump past the navigation */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
       <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-3 sm:px-6">
           <div className="flex items-center gap-2 lg:gap-5">
             <Link to="/dashboard" className="hidden lg:block">
               <Logo />
             </Link>
-            <nav className="flex items-center gap-0.5 sm:gap-1">
+            <nav aria-label="Main" className="flex items-center gap-0.5 sm:gap-1">
               {NAV.map(({ to, label, icon: Icon }) => (
                 <NavLink key={to} to={to} className={navLink} aria-label={label}>
                   <Icon className="size-4" />
@@ -75,7 +82,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">{children}</main>
+      <main id="main" tabIndex={-1} className="relative mx-auto max-w-6xl px-4 py-8 outline-none sm:px-6">
+        {children}
+      </main>
       <CommandCenter
         paletteOpen={paletteOpen}
         setPaletteOpen={setPaletteOpen}

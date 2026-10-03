@@ -34,6 +34,10 @@ What you can do in the app:
 
 The dev server passes every `/api` call on to the backend on port 8080 (see `frontend/vite.config.ts`), so the backend needs no CORS settings.
 
+## Design
+
+The design decisions (users, principles, colors, fonts, motion, accessibility and trade-offs) are explained in [DESIGN.md](DESIGN.md).
+
 ## Testing with Postman
 
 A ready-made collection is in [`postman/Job-Application-Assistant.postman_collection.json`](postman/Job-Application-Assistant.postman_collection.json).

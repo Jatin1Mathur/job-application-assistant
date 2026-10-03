@@ -47,7 +47,7 @@ export default function NewApplicationPage() {
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">New application</h1>
       <p className="mt-1 text-sm text-muted-foreground">Paste the job posting. The AI compares it with your resume.</p>
 
-      <form onSubmit={submit} className="mt-6 space-y-5 rounded-2xl border bg-card p-6 shadow-xs sm:p-8">
+      <form onSubmit={submit} className="mt-6 space-y-5 rounded-2xl border bg-card p-6 shadow-card sm:p-8">
         {error && <ErrorAlert message={error} />}
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-1.5">

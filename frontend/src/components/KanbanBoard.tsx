@@ -11,12 +11,14 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { GripVertical } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { STATUSES } from '../api.ts'
 import type { Application, ApplicationStatus } from '../api.ts'
 import { scoreTone } from '../lib/format.ts'
 import { statusLabel } from '../lib/status.ts'
+import AnimatedNumber from './AnimatedNumber.tsx'
 import { StatusDot } from './StatusBadge.tsx'
 
 function CardBody({ application }: { application: Application }) {
@@ -42,10 +44,15 @@ function CardBody({ application }: { application: Application }) {
 function BoardCard({ application }: { application: Application }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: application.id })
   return (
-    <li
+    // layout + layoutId: when the status changes, the card glides from its old column to the new one,
+    // and the cards around it slide to close the gap, instead of everything jumping
+    <motion.li
       ref={setNodeRef}
+      layout
+      layoutId={`application-${application.id}`}
+      transition={{ type: 'spring', duration: 0.35, bounce: 0.15 }}
       data-testid={`board-card-${application.id}`}
-      className={`flex rounded-xl border bg-card shadow-xs transition-shadow hover:shadow-md ${isDragging ? 'opacity-40' : ''}`}
+      className={`flex rounded-xl border bg-card shadow-card transition-shadow hover:shadow-raised ${isDragging ? 'opacity-40' : ''}`}
     >
       <button
         type="button"
@@ -56,10 +63,10 @@ function BoardCard({ application }: { application: Application }) {
       >
         <GripVertical className="size-4" />
       </button>
-      <Link to={`/applications/${application.id}`} className="min-w-0 flex-1 rounded-r-xl py-3 pr-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+      <Link to={`/applications/${application.id}`} state={{ application }} className="min-w-0 flex-1 rounded-r-xl py-3 pr-3">
         <CardBody application={application} />
       </Link>
-    </li>
+    </motion.li>
   )
 }
 
@@ -78,7 +85,7 @@ function Column({ status, applications }: { status: ApplicationStatus; applicati
         <StatusDot status={status} />
         {statusLabel(status)}
         <span className="ml-auto rounded-full bg-background px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground ring-1 ring-border">
-          {applications.length}
+          <AnimatedNumber value={applications.length} />
         </span>
       </h2>
       <ul className="flex min-h-24 flex-1 flex-col gap-2">
@@ -129,7 +136,7 @@ export default function KanbanBoard({
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragged(null)}>
       {/* On a phone the columns scroll sideways inside this box; the page itself does not */}
-      <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+      <div className="relative -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
         {STATUSES.map((status) => (
           <Column
             key={status}
@@ -140,7 +147,7 @@ export default function KanbanBoard({
       </div>
       <DragOverlay>
         {dragged && (
-          <div className="w-60 rotate-2 cursor-grabbing rounded-xl border bg-card p-3 shadow-xl">
+          <div className="w-60 rotate-2 cursor-grabbing rounded-xl border bg-card p-3 shadow-pop">
             <CardBody application={dragged} />
           </div>
         )}

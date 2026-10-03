@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, errorMessage, STATUSES } from '../api.ts'
 import type { Application, ApplicationStatus, Page } from '../api.ts'
+import AnimatedNumber from '../components/AnimatedNumber.tsx'
+import AnimatedTabsList from '../components/AnimatedTabsList.tsx'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import KanbanBoard from '../components/KanbanBoard.tsx'
@@ -16,7 +18,8 @@ import ScoreRing from '../components/ScoreRing.tsx'
 import StatusBadge from '../components/StatusBadge.tsx'
 import { Button } from '../components/ui/button.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
-import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs.tsx'
+import { Tabs } from '../components/ui/tabs.tsx'
+import { celebrateOffer } from '../lib/celebrate.ts'
 import { formatDate } from '../lib/format.ts'
 import { staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
@@ -47,12 +50,16 @@ function ApplicationCard({ application }: { application: Application }) {
   return (
     // variants: the card takes part in the list's stagger. whileHover: it lifts a little under the mouse
     <motion.li variants={staggerItem} whileHover={{ y: -4 }} transition={{ duration: 0.18 }}>
-      <Link
-        to={`/applications/${application.id}`}
-        className="group flex h-full flex-col rounded-2xl border bg-card p-5 shadow-xs outline-none transition-shadow hover:shadow-lg hover:shadow-primary/5 focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
+      {/* state: hands the application to the detail page, so its header can be drawn immediately */}
+      <Link to={`/applications/${application.id}`} state={{ application }} className="group block h-full rounded-2xl">
+        {/* layoutId: the detail page's header has the same one, so this card grows into it */}
+        <motion.div
+          layoutId={`application-${application.id}`}
+          transition={{ type: 'spring', duration: 0.38, bounce: 0.12 }}
+          className="flex h-full flex-col rounded-2xl border bg-card p-5 shadow-card transition-shadow group-hover:shadow-raised"
+        >
         <div className="flex items-start justify-between gap-3">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-base font-semibold text-accent-foreground">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-accent font-display text-base font-semibold text-accent-foreground">
             {application.companyName.charAt(0).toUpperCase()}
           </span>
           {application.matchScore === null ? (
@@ -71,6 +78,7 @@ function ApplicationCard({ application }: { application: Application }) {
           <StatusBadge status={application.status} />
           <span className="text-xs text-muted-foreground">{formatDate(application.createdAt)}</span>
         </div>
+        </motion.div>
       </Link>
     </motion.li>
   )
@@ -147,6 +155,7 @@ export default function DashboardPage() {
     try {
       await api.updateStatus(application.id, status)
       toast.success(`${application.companyName} moved to ${statusLabel(status)}`)
+      if (status === 'OFFER') celebrateOffer()
     } catch (err) {
       setStatus(previous)
       toast.error('Could not move the application', {
@@ -166,9 +175,15 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My applications</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {result
-              ? `${result.totalElements} ${result.totalElements === 1 ? 'application' : 'applications'}${!isBoard && filter !== 'ALL' ? ` with status ${statusLabel(filter)}` : ''}`
-              : 'Loading…'}
+            {result ? (
+              <>
+                <AnimatedNumber value={result.totalElements} />{' '}
+                {result.totalElements === 1 ? 'application' : 'applications'}
+                {!isBoard && filter !== 'ALL' ? ` with status ${statusLabel(filter)}` : ''}
+              </>
+            ) : (
+              'Loading…'
+            )}
           </p>
         </div>
         <MotionButton asChild size="lg">
@@ -187,26 +202,28 @@ export default function DashboardPage() {
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         {/* List or board */}
         <Tabs value={view} onValueChange={chooseView}>
-          <TabsList aria-label="View">
-            <TabsTrigger value="list">
-              <LayoutGrid /> List
-            </TabsTrigger>
-            <TabsTrigger value="board">
-              <Columns3 /> Board
-            </TabsTrigger>
-          </TabsList>
+          <AnimatedTabsList
+            id="view"
+            label="View"
+            value={view}
+            options={[
+              { value: 'list', label: 'List', icon: LayoutGrid },
+              { value: 'board', label: 'Board', icon: Columns3 },
+            ]}
+          />
         </Tabs>
         {!isBoard && (
           <Tabs value={filter} onValueChange={chooseFilter} className="min-w-0">
             <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-              <TabsList aria-label="Status filter">
-                <TabsTrigger value="ALL">All</TabsTrigger>
-                {STATUSES.map((status) => (
-                  <TabsTrigger key={status} value={status}>
-                    {statusLabel(status)}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <AnimatedTabsList
+                id="status"
+                label="Status filter"
+                value={filter}
+                options={[
+                  { value: 'ALL', label: 'All' },
+                  ...STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
+                ]}
+              />
             </div>
           </Tabs>
         )}

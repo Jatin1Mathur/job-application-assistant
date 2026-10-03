@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api, errorMessage, STATUSES } from '../api.ts'
 import type { Insights } from '../api.ts'
+import AnimatedNumber from '../components/AnimatedNumber.tsx'
+import ChartReveal from '../components/ChartReveal.tsx'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import MotionButton from '../components/MotionButton.tsx'
@@ -13,7 +15,7 @@ import { Skeleton } from '../components/ui/skeleton.tsx'
 import { scoreTone } from '../lib/format.ts'
 import { statusLabel } from '../lib/status.ts'
 
-const card = 'rounded-2xl border bg-card p-6 shadow-xs'
+const card = 'rounded-2xl border bg-card p-6 shadow-card'
 
 // Chart text and grid lines use the theme's colors, so they are right in light and dark mode
 const axisTick = { fill: 'var(--muted-foreground)', fontSize: 12 }
@@ -124,8 +126,9 @@ export default function InsightsPage() {
     <PageTransition>
       <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        {insights.totalApplications} {insights.totalApplications === 1 ? 'application' : 'applications'},{' '}
-        {insights.analyzedApplications} analyzed by the AI
+        <AnimatedNumber value={insights.totalApplications} />{' '}
+        {insights.totalApplications === 1 ? 'application' : 'applications'},{' '}
+        <AnimatedNumber value={insights.analyzedApplications} /> analyzed by the AI
       </p>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -133,7 +136,7 @@ export default function InsightsPage() {
         <section className={`${card} min-w-0 lg:col-span-2`}>
           <h2 className="text-base font-semibold">Applications by status</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">Where your applications are right now.</p>
-          <div className="mt-4 h-56" data-testid="status-chart">
+          <ChartReveal direction="up" className="mt-4 h-56" data-testid="status-chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={statusRows} margin={{ top: 20, right: 4, bottom: 0, left: -20 }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
@@ -145,7 +148,7 @@ export default function InsightsPage() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartReveal>
           <HiddenTable caption="Applications by status" rows={statusRows} valueHeader="Applications" />
         </section>
 
@@ -196,7 +199,7 @@ export default function InsightsPage() {
                 </p>
               )}
               {/* 36px per skill keeps the bars thin however many skills there are */}
-              <div className="mt-4" style={{ height: skillRows.length * 36 + 24 }} data-testid="skills-chart">
+              <ChartReveal direction="right" className="mt-4" style={{ height: skillRows.length * 36 + 24 }} data-testid="skills-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={skillRows} layout="vertical" margin={{ top: 0, right: 28, bottom: 0, left: 0 }}>
                     <CartesianGrid horizontal={false} stroke="var(--border)" />
@@ -216,7 +219,7 @@ export default function InsightsPage() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
+              </ChartReveal>
               <HiddenTable caption="Skills you are missing most often" rows={skillRows} valueHeader="Applications" />
             </>
           )}

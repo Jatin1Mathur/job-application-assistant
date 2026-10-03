@@ -1,11 +1,12 @@
 import { ArrowLeft, Check, Columns2, Copy, FileText, Lightbulb, Loader2, PenLine, Sparkles, Trash2, Zap } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, errorMessage, STATUSES } from '../api.ts'
 import type { Application, ApplicationStatus, MatchAnalysis, ResumeSummary } from '../api.ts'
 import AiSteps from '../components/AiSteps.tsx'
+import AnimatedTabsList from '../components/AnimatedTabsList.tsx'
 import HighlightedText from '../components/HighlightedText.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
 import MotionButton from '../components/MotionButton.tsx'
@@ -25,7 +26,8 @@ import {
 } from '../components/ui/dialog.tsx'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select.tsx'
 import { Skeleton } from '../components/ui/skeleton.tsx'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs.tsx'
+import { Tabs, TabsContent } from '../components/ui/tabs.tsx'
+import { celebrateOffer } from '../lib/celebrate.ts'
 import { formatDate, scoreTone } from '../lib/format.ts'
 import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
@@ -33,7 +35,7 @@ import { statusLabel } from '../lib/status.ts'
 const ANALYZE_STEPS = ['Reading your resume…', 'Comparing skills…', 'Writing tips…']
 const LETTER_STEPS = ['Reading your resume…', 'Studying the job posting…', 'Writing your cover letter…']
 
-const section = 'rounded-2xl border bg-card p-6 shadow-xs'
+const section = 'rounded-2xl border bg-card p-6 shadow-card'
 
 // Skill tags that pop in one after another: green for matching skills, red for missing ones
 function SkillTags({ title, skills, kind }: { title: string; skills: string[]; kind: 'matching' | 'missing' }) {
@@ -85,7 +87,13 @@ function DetailSkeleton() {
 export default function ApplicationDetailPage() {
   const id = Number(useParams().id)
   const navigate = useNavigate()
-  const [application, setApplication] = useState<Application | null>(null)
+  // Coming from the dashboard, the card hands over the application it already has. The header can then be
+  // drawn at once, which is what lets the card grow into it (shared layoutId). Fresh data still loads below.
+  const handedOver = (useLocation().state as { application?: Application } | null)?.application
+  const [application, setApplication] = useState<Application | null>(handedOver?.id === id ? handedOver : null)
+  // True once the application and the resumes have come back from the backend
+  const [loaded, setLoaded] = useState(false)
+  const [tab, setTab] = useState('overview')
   const [resumes, setResumes] = useState<ResumeSummary[]>([])
   const [resumeId, setResumeId] = useState<number | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -117,6 +125,7 @@ export default function ApplicationDetailPage() {
         // Start with the resume of the last analysis, if it still exists; otherwise the newest one
         const analyzedResume = loadedResumes.find((resume) => resume.id === loadedApplication.analysis?.resumeId)
         setResumeId(analyzedResume?.id ?? loadedResumes[0]?.id ?? null)
+        setLoaded(true)
       })
       .catch((err) => setLoadError(errorMessage(err)))
   }, [id])
@@ -176,6 +185,7 @@ export default function ApplicationDetailPage() {
     try {
       setApplication(await api.updateStatus(id, status))
       toast.success(`Status changed to ${statusLabel(status)}`)
+      if (status === 'OFFER') celebrateOffer()
     } catch (err) {
       toast.error('Could not change the status', { description: errorMessage(err) })
     } finally {
@@ -237,12 +247,22 @@ export default function ApplicationDetailPage() {
         <ArrowLeft className="size-4" /> Back to applications
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{application.jobTitle}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {application.companyName} · added {formatDate(application.createdAt)}
-          </p>
+      {/* Same layoutId as the card on the dashboard: Motion animates the card's box into this header */}
+      <motion.div
+        layoutId={`application-${application.id}`}
+        transition={{ type: 'spring', duration: 0.38, bounce: 0.12 }}
+        className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card p-5 shadow-card sm:p-6"
+      >
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="hidden size-12 shrink-0 items-center justify-center rounded-xl bg-accent font-display text-lg font-semibold text-accent-foreground sm:flex">
+            {application.companyName.charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight">{application.jobTitle}</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {application.companyName} · added {formatDate(application.createdAt)}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Select
@@ -291,19 +311,36 @@ export default function ApplicationDetailPage() {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
+      </motion.div>
 
-      <Tabs defaultValue="overview" className="mt-6" onValueChange={(tab) => tab === 'compare' && loadResumeText()}>
-        <TabsList>
-          <TabsTrigger value="overview">
-            <Sparkles /> Overview
-          </TabsTrigger>
-          <TabsTrigger value="compare">
-            <Columns2 /> Compare
-          </TabsTrigger>
-        </TabsList>
+      {!loaded ? (
+        <div className="mt-6 grid gap-6 lg:grid-cols-5" aria-busy="true" aria-label="Loading application">
+          <div className="space-y-6 lg:col-span-3">
+            <Skeleton className="h-28 rounded-2xl" />
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
+          <Skeleton className="h-72 rounded-2xl lg:col-span-2" />
+        </div>
+      ) : (
+      <Tabs
+        value={tab}
+        className="mt-6"
+        onValueChange={(next) => {
+          setTab(next)
+          if (next === 'compare') loadResumeText()
+        }}
+      >
+        <AnimatedTabsList
+          id="detail"
+          label="Sections"
+          value={tab}
+          options={[
+            { value: 'overview', label: 'Overview', icon: Sparkles },
+            { value: 'compare', label: 'Compare', icon: Columns2 },
+          ]}
+        />
 
-        <TabsContent value="overview">
+        <TabsContent value="overview" className="animate-in fade-in-0 duration-200">
       <motion.div variants={staggerList} initial="hidden" animate="show" className="mt-4 grid gap-6 lg:grid-cols-5">
         <div className="min-w-0 space-y-6 lg:col-span-3">
           {/* Which resume the AI should use */}
@@ -512,7 +549,7 @@ export default function ApplicationDetailPage() {
         </TabsContent>
 
         {/* Resume text and job description next to each other, with the skills from the analysis marked */}
-        <TabsContent value="compare">
+        <TabsContent value="compare" className="animate-in fade-in-0 duration-200">
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground" data-testid="compare-legend">
             {analysis ? (
               <>
@@ -574,6 +611,7 @@ export default function ApplicationDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+      )}
     </PageTransition>
   )
 }
