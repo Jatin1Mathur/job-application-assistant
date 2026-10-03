@@ -12,4 +12,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	boolean existsByEmail(String email);
 
+	// The shared demo account, if it has been created
+	Optional<User> findByDemoTrue();
+
 }

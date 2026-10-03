@@ -24,4 +24,7 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
 	@Query("select a.status as status, count(a) as total from JobApplication a where a.userId = :userId group by a.status")
 	List<StatusCount> countByStatus(Long userId);
 
+	// Used when the demo account is reset. The database deletes the analyses of these applications with them
+	void deleteByUserId(Long userId);
+
 }

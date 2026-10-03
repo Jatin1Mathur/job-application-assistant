@@ -223,11 +223,62 @@ Per frame the story costs a few dozen multiplications: no new geometry, no new m
 
 Size: the 3D code grew from 944 kB to 948 kB (254 kB to 255 kB compressed). The main bundle grew from 1,096 kB to 1,107 kB (339 kB to 342 kB compressed), mostly Motion's scroll functions.
 
-## 9. What I have not done
+## 9. Home page and login (step 16)
+
+Screenshots before and after are in `docs/screenshots/home-login/` (desktop and phone, light and dark).
+
+Three skills were named for this step (impeccable, design-taste-frontend, high-end-visual-design). Where they disagree with DESIGN.md, DESIGN.md wins: the fonts, the warm paper palette, the flat hairline cards and the icon set stay as they are. From the skills I took the rules that do not depend on a look: one accent colour on the whole page, no invented numbers, every animation needs a reason, mouse-following effects must not re-render React, and everything that moves needs a reduced-motion version.
+
+### Home page: what each feature is for
+
+| Feature | The UX reason |
+|---|---|
+| **"Try it now" demo** | A visitor should see what the product gives before being asked for an email address. Picking a job and pressing Analyze takes ten seconds and shows the real shape of a result: score, matching skills, missing skills, a tip. |
+| **Labelled as a sample** | The demo does not call the AI model. Its three results were written by hand. A sand-coloured label in the result ("Sample result, not a live analysis") and the text above say so, because a visitor who later sees a different score for their own resume should not feel misled. |
+| **Generic vs tailored slider** | "A better cover letter" is an empty claim until you see two letters next to each other. The divider lets the visitor compare the same lines. The highlighted skills show *why* the second letter is better: it names what the posting asks for. The tailored letter also admits the missing skill, because that is what the product does: it does not invent experience. |
+| **Slider as a range input** | A before/after slider is often mouse-only. Here it is a normal range input under the picture, so touch, mouse and the arrow keys all work, and a screen reader announces it. |
+| **"How it's built" diagram** | Part of the audience are reviewers and other students. A diagram answers "what is this made of" faster than a list of logos. The dots show the direction a request travels. One sentence per part appears on hover, tap or keyboard focus, so nobody has to read five paragraphs. |
+| **The diagram is honest about the order** | The request was drawn as a chain (React, Spring Boot, PostgreSQL + Redis, Ollama). In the real system Spring Boot talks to all three directly, so the diagram shows three branches. |
+| **"Built by" card** | A name, a degree and a link to the code make a student project checkable. The LinkedIn link is prepared but hidden until its URL is filled in (`TODO` in `BuiltBy.tsx`), because a dead link is worse than no link. |
+| **Cursor-follow light** | A very soft warm light under the mouse in the hero makes the page react to the visitor without asking for a click. It is decoration, so it is not rendered on touch devices or with reduced motion. |
+| **Magnetic primary buttons** | The three primary buttons lean a few pixels towards the mouse. It makes the main action feel reachable and shows which button is the main one. Off on touch devices and with reduced motion. |
+
+No numbers on the page are invented. The only numbers are the sample scores (labelled as samples) and "0 to 100".
+
+What I changed in the order of the page: the hero keeps its 3D story, and the demo sits directly after it. The request said "hero demo", but the hero already holds the headline, the buttons and the 3D scene, and a third thing there would push the buttons below the fold. The hero has a link "Try a sample first" that jumps to the demo. The old example card that changed by itself is gone: the demo shows the same thing and lets the visitor choose.
+
+### Login and register: what each feature is for
+
+| Feature | The UX reason |
+|---|---|
+| **"Try with demo account"** | The landing demo shows one result. The demo account shows the whole product (board, analyses, cover letter, insights) with one click and no sign-up. |
+| **Demo data is reset every night** | The account is shared. Without a reset, the next visitor would see whatever the last one left behind. A banner inside the app says that nothing is kept. |
+| **Demo account cannot be damaged** | It has no password that anyone knows: it is entered through its own endpoint, and a password login for its email is always refused. The database itself (a trigger) refuses to delete the demo user or to change its email or password, so this also holds for features added later. |
+| **Sample analyses say they are samples** | In the demo account the line "Analyzed with ..." names "sample data (not an AI result)" instead of a model. |
+| **Morphing between Log in and Create account** | They are one form with one difference (the strength meter). The switch at the top slides, the heading changes in place, the meter grows in, and what was typed stays. A full page change for a two-field form would feel heavier than the task. |
+| **Show/hide password** | Typing a long password blind causes errors, mostly on phones. The button says what it does to screen readers ("Show password", pressed or not). |
+| **Caps Lock warning** | The most common reason for "wrong password" that the user cannot see. |
+| **Password strength meter (register only)** | Feedback while choosing, not an error afterwards. The label is a word ("Weak", "Good"), so it does not depend on colour. It is a rough estimate from length and character variety, and the text says only that. |
+| **Inline validation** | A field shows its problem when you leave it, next to the field, in words. A short password is caught in the form, without a round trip to the server. |
+| **"Email or password is incorrect"** | One message for both cases, so nobody can use the form to find out which email addresses have an account. |
+| **Autocomplete attributes** | `username` + `current-password` on login, `email` + `new-password` on register: password managers fill the right fields and offer to save a new password. |
+| **3D backpack and tips on the left** | The left half used to repeat the sales pitch to people who had already decided. Now it shows the same object as the landing page (continuity) and five plain job-hunt tips. The tips contain advice, no statistics. They pause while the mouse is over them or a button has focus, and there are previous/next buttons. |
+| **Success animation** | A check mark that draws itself for one second confirms "that worked" before the page changes. Without it, the form just disappears. |
+
+### Accessibility and performance
+
+- **Keyboard:** every new control is reachable and usable with the keyboard: the demo (radio buttons), the slider (arrow keys), the diagram parts (Tab, Enter), the tips (buttons), the password toggle. Focus is always visible.
+- **Reduced motion:** no cursor light, no magnetic buttons, no travelling dots, no automatic tip rotation, the demo result appears at once, the login backpack is a still drawing.
+- **Contrast:** text on the teal panel is white or 75% white on a dark teal; the warning and error texts use the dark shades of amber and red.
+- **Loading:** the login page downloads the 3D code only on wide screens, where the side panel is visible. Phones never load it. The new home sections are plain HTML and SVG and add no library.
+
+## 10. What I have not done
 
 - No test with real users or with a screen reader user. My checks were computed contrast, keyboard walkthroughs, and automated browser runs at desktop and phone width.
 - The automatic detector of the impeccable skill was not run, as described above.
 - The 44 px rule is applied through one CSS rule for touch and narrow screens. I verified it on the insights page in the browser test, not on every page.
 - Frame rates of the 3D scenes on real phones are still unmeasured.
+- The demo account is shared: two visitors at the same time see each other's changes until the nightly reset.
+- The password strength meter is a simple estimate, not a dictionary check.
 - The scroll story was measured on my laptop only. I have not measured it on a real phone or on an older computer.
 - The backpack was rebuilt from one photo. Its back, sides and depth are my assumption, and I did not have a second view to check them.

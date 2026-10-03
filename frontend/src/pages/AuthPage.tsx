@@ -1,190 +1,394 @@
-import { ArrowLeft, FileText, LayoutDashboard, Loader2, Target } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { lazy, useEffect, useRef, useState } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
-import { errorMessage } from '../api.ts'
+import { ApiError, errorMessage } from '../api.ts'
 import { useAuth } from '../auth.tsx'
+import { BagDrawing } from '../components/BackpackFallback.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
+import Lazy3D from '../components/Lazy3D.tsx'
 import Logo from '../components/Logo.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import ThemeToggle from '../components/ThemeToggle.tsx'
 import { Alert, AlertDescription } from '../components/ui/alert.tsx'
+import { Button } from '../components/ui/button.tsx'
 import { Input } from '../components/ui/input.tsx'
 import { Label } from '../components/ui/label.tsx'
-import { staggerItem, staggerList } from '../lib/motion.ts'
+import { emailProblem, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordStrength } from '../lib/password.ts'
 import { usePageTitle } from '../lib/usePageTitle.ts'
 
-const PITCH = [
-  { icon: Target, title: 'A match score with reasons', text: 'See the skills you already have and the ones to work on.' },
-  { icon: FileText, title: 'A cover letter draft', text: 'Written from your real resume. Nothing is invented.' },
-  { icon: LayoutDashboard, title: 'Every application in one place', text: 'Track each job from saved to offer.' },
+// The 3D code is a separate download. It starts only on wide screens, where the side panel is shown.
+const BackpackMini = lazy(() => import('../three/BackpackMini.tsx'))
+
+// Plain advice, no numbers: nothing here is a statistic
+const TIPS = [
+  'Read the posting twice. Mark the skills it names, then check each one against your resume.',
+  'Put your most relevant project first. The order of a resume can change for each application.',
+  'A missing skill is not a no. Say what you have done that comes closest, and that you want to learn the rest.',
+  'Write the cover letter for one job. If it could be sent to any company, it is too general.',
+  'Keep a record of every application: the date, the status, and which resume you sent.',
 ]
 
-// The left half of the login and register pages: a short product pitch on a slowly moving gradient
-function PitchPanel() {
+// The left half of the login and register pages: a small backpack and job-hunt tips that take turns
+function SidePanel() {
+  const reducedMotion = useReducedMotion()
+  const [tip, setTip] = useState(0)
+  const [paused, setPaused] = useState(false)
+
+  // A new tip every 7 seconds. Not with "reduce motion", and not while someone is reading or using the arrows.
+  useEffect(() => {
+    if (reducedMotion || paused) return
+    const timer = setInterval(() => setTip((current) => (current + 1) % TIPS.length), 7000)
+    return () => clearInterval(timer)
+  }, [reducedMotion, paused])
+
+  const step = (by: number) => setTip((current) => (current + by + TIPS.length) % TIPS.length)
+
   return (
     <div className="animated-gradient relative hidden overflow-hidden lg:flex lg:w-1/2 lg:flex-col lg:justify-between lg:p-12">
-      {/* Two soft blobs that drift slowly behind the text */}
-      <motion.div
-        aria-hidden
-        className="absolute -left-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl"
-        animate={{ x: [0, 40, 0], y: [0, 30, 0] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        aria-hidden
-        className="absolute -bottom-32 -right-20 size-[28rem] rounded-full bg-[#ffeccd]/10 blur-3xl"
-        animate={{ x: [0, -30, 0], y: [0, -40, 0] }}
-        transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
-      />
-
       <div className="relative">
         <Logo light />
       </div>
-      <motion.div className="relative" variants={staggerList} initial="hidden" animate="show">
-        <motion.h2 variants={staggerItem} className="max-w-md font-display text-5xl font-semibold leading-[1.05] text-white">
-          Know where you stand before you apply.
-        </motion.h2>
-        <motion.p variants={staggerItem} className="mt-4 max-w-md text-base text-white/75">
-          Compare your resume with any job posting, see what to work on, and keep every application in one place.
-        </motion.p>
-        <ul className="mt-10 space-y-5">
-          {PITCH.map(({ icon: Icon, title, text }) => (
-            <motion.li key={title} variants={staggerItem} className="flex gap-4">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/12 text-white ring-1 ring-white/25">
-                <Icon className="size-5" />
-              </span>
-              <span>
-                <span className="block text-sm font-semibold text-white">{title}</span>
-                <span className="block text-sm text-white/70">{text}</span>
-              </span>
-            </motion.li>
-          ))}
-        </ul>
-      </motion.div>
-      <p className="relative text-xs text-white/60">The analysis runs on a local AI model.</p>
+
+      <div className="relative">
+        <Lazy3D
+          label="A leather backpack, turning slowly"
+          className="mx-auto h-64 w-64"
+          fallback={
+            <svg viewBox="150 120 200 200" className="size-full" aria-hidden>
+              <BagDrawing cx={250} cy={215} />
+            </svg>
+          }
+          scene={(props) => <BackpackMini {...props} />}
+        />
+        <h2 className="mt-6 max-w-md font-display text-4xl font-semibold leading-[1.08] text-white">Know where you stand before you apply.</h2>
+      </div>
+
+      <section
+        className="relative max-w-md"
+        aria-roledescription="carousel"
+        aria-label="Job-hunt tips"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onFocus={() => setPaused(true)}
+        onBlur={() => setPaused(false)}
+      >
+        <p className="text-sm font-semibold text-white/75">
+          Job-hunt tip {tip + 1} of {TIPS.length}
+        </p>
+        <div className="mt-2 min-h-24" aria-live={paused ? 'polite' : 'off'}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p
+              key={tip}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="text-lg leading-relaxed text-white"
+              data-testid="tip"
+            >
+              {TIPS[tip]}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+        <div className="mt-2 flex gap-2">
+          <button type="button" onClick={() => step(-1)} aria-label="Previous tip" className="flex size-11 items-center justify-center rounded-full text-white ring-1 ring-white/35 transition-colors hover:bg-white/12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            <ChevronLeft className="size-5" />
+          </button>
+          <button type="button" onClick={() => step(1)} aria-label="Next tip" className="flex size-11 items-center justify-center rounded-full text-white ring-1 ring-white/35 transition-colors hover:bg-white/12 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            <ChevronRight className="size-5" />
+          </button>
+        </div>
+      </section>
     </div>
   )
 }
 
+// Four small bars and a word. The word carries the meaning, so it does not depend on colour.
+function StrengthMeter({ password, email }: { password: string; email: string }) {
+  const strength = passwordStrength(password, email)
+  const colors = ['bg-rose-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-emerald-600']
+  return (
+    <div id="password-strength" data-testid="strength" data-level={strength.level}>
+      <div className="flex gap-1.5" aria-hidden>
+        {[1, 2, 3, 4].map((bar) => (
+          <span key={bar} className={`h-1.5 flex-1 rounded-full transition-colors duration-200 ${bar <= strength.level ? colors[strength.level] : 'bg-muted'}`} />
+        ))}
+      </div>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        <span className="font-semibold text-foreground">Password strength: {strength.label}.</span> {strength.hint}
+      </p>
+    </div>
+  )
+}
+
+// Shown for a moment after a successful login, before the dashboard opens: a circle and a check mark that draw themselves
+function SuccessMark({ text }: { text: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background"
+      role="status"
+      data-testid="auth-success"
+    >
+      <svg viewBox="0 0 64 64" className="size-20 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <motion.circle cx="32" cy="32" r="27" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.4, ease: 'easeOut' }} />
+        <motion.path d="M21 33l8 8 15-17" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, delay: 0.3, ease: 'easeOut' }} />
+      </svg>
+      <p className="text-lg font-semibold">{text}</p>
+    </motion.div>
+  )
+}
+
+const fieldError = 'mt-1.5 text-sm font-medium text-destructive'
+
 export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
-  const { token, notice, login, register } = useAuth()
+  const { token, notice, login, register, demoLogin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const reducedMotion = useReducedMotion()
+  const emailInput = useRef<HTMLInputElement>(null)
+  const passwordInput = useRef<HTMLInputElement>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [capsLock, setCapsLock] = useState(false)
+  // A field shows its problem only after the visitor has left it once, or after a try to submit
+  const [touched, setTouched] = useState({ email: false, password: false })
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  // form: waiting for input. busy/demo: a request is running. success: logged in, the check mark is shown.
+  const [phase, setPhase] = useState<'form' | 'busy' | 'demo' | 'success'>('form')
+  const [successText, setSuccessText] = useState('')
 
   const isLogin = mode === 'login'
   const cameFrom = (location.state as { from?: string } | null)?.from ?? '/dashboard'
   usePageTitle(isLogin ? 'Log in' : 'Create account')
 
-  if (token) {
+  const emailError = emailProblem(email)
+  const passwordError = !password
+    ? 'Enter your password.'
+    : !isLogin && password.length < MIN_PASSWORD_LENGTH
+      ? `Use at least ${MIN_PASSWORD_LENGTH} characters.`
+      : !isLogin && password.length > MAX_PASSWORD_LENGTH
+        ? `Use at most ${MAX_PASSWORD_LENGTH} characters.`
+        : null
+  const showEmailError = touched.email && emailError
+  const showPasswordError = touched.password && passwordError
+
+  // After the check mark has been seen, go on to the dashboard
+  useEffect(() => {
+    if (phase !== 'success') return
+    const timer = setTimeout(() => navigate(cameFrom, { replace: true }), reducedMotion ? 500 : 1000)
+    return () => clearTimeout(timer)
+  }, [phase, reducedMotion, navigate, cameFrom])
+
+  // Someone who is already logged in has nothing to do here
+  if (token && phase === 'form') {
     return <Navigate to={cameFrom} replace />
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     setError(null)
-    setLoading(true)
+    setTouched({ email: true, password: true })
+    if (emailError) return emailInput.current?.focus()
+    if (passwordError) return passwordInput.current?.focus()
+    setPhase('busy')
     try {
       await (isLogin ? login(email, password) : register(email, password))
-      toast.success(isLogin ? 'You are logged in' : 'Your account is ready')
-      navigate(cameFrom, { replace: true })
+      setSuccessText(isLogin ? 'You are logged in' : 'Your account is ready')
+      setPhase('success')
     } catch (err) {
-      setError(errorMessage(err))
-    } finally {
-      setLoading(false)
+      // One message for "unknown email" and "wrong password", so nobody can test which emails have an account
+      setError(isLogin && err instanceof ApiError && err.status === 401 ? 'Email or password is incorrect' : errorMessage(err))
+      setPhase('form')
     }
   }
 
+  async function enterDemo() {
+    setError(null)
+    setPhase('demo')
+    try {
+      await demoLogin()
+      setSuccessText('Welcome to the demo account')
+      setPhase('success')
+    } catch (err) {
+      setError(errorMessage(err))
+      setPhase('form')
+    }
+  }
+
+  const watchCapsLock = (event: KeyboardEvent<HTMLInputElement>) => setCapsLock(event.getModifierState('CapsLock'))
+  const working = phase === 'busy' || phase === 'demo'
+
   return (
-    <div className="flex min-h-screen">
-      <PitchPanel />
-      <div className="relative flex w-full flex-col items-center justify-center px-5 py-12 lg:w-1/2">
+    <div className="flex min-h-dvh">
+      <SidePanel />
+      <main id="main" className="relative flex w-full flex-col items-center justify-center px-5 py-16 lg:w-1/2">
         <div className="absolute inset-x-4 top-4 flex items-center justify-between">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <Link to="/" className="inline-flex min-h-11 items-center gap-1.5 rounded text-sm font-medium text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" /> Home
           </Link>
           <ThemeToggle />
         </div>
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
+
+        <div className="relative w-full max-w-sm">
+          {phase === 'success' && <SuccessMark text={successText} />}
+
+          <div className="mb-7 lg:hidden">
             <Logo />
           </div>
-          {/* The heading and form slide in again when switching between login and register */}
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={mode}
-              initial={{ opacity: 0, x: 16 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -16 }}
-              transition={{ duration: 0.2 }}
-            >
-              <h1 className="text-3xl font-semibold">
-                {isLogin ? 'Welcome back' : 'Create your account'}
-              </h1>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                {isLogin ? 'Log in to continue your job search.' : 'An email address and a password are all you need.'}
-              </p>
 
-              <form onSubmit={submit} className="mt-7 space-y-4">
-                {notice && isLogin && (
-                  <Alert>
-                    <AlertDescription>{notice}</AlertDescription>
-                  </Alert>
-                )}
-                {error && <ErrorAlert message={error} />}
-                <div className="space-y-1.5">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="h-10"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    autoComplete={isLogin ? 'current-password' : 'new-password'}
-                    required
-                    className="h-10"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={isLogin ? 'Your password' : 'At least 8 characters'}
-                  />
-                </div>
-                <MotionButton type="submit" disabled={loading} className="h-10 w-full">
-                  {loading && <Loader2 className="animate-spin" />}
-                  {isLogin ? 'Log in' : 'Create account'}
-                </MotionButton>
-              </form>
+          {/* Log in / Create account: two links that look like one switch. The marker slides from one to the other. */}
+          <nav aria-label="Log in or create an account" className="grid grid-cols-2 rounded-xl bg-muted p-1 text-sm font-semibold">
+            {(['login', 'register'] as const).map((target) => (
+              <Link
+                key={target}
+                to={`/${target}`}
+                state={location.state}
+                replace
+                aria-current={mode === target ? 'page' : undefined}
+                onClick={() => setError(null)}
+                className={`relative flex min-h-11 items-center justify-center rounded-lg transition-colors ${mode === target ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {mode === target && <motion.span layoutId="auth-switch" className="absolute inset-0 rounded-lg border bg-card" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+                <span className="relative">{target === 'login' ? 'Log in' : 'Create account'}</span>
+              </Link>
+            ))}
+          </nav>
 
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                {isLogin ? 'No account yet?' : 'Already have an account?'}{' '}
-                <Link
-                  to={isLogin ? '/register' : '/login'}
-                  state={location.state}
-                  onClick={() => setError(null)}
-                  className="rounded font-semibold text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary"
+          {/* The heading changes in place; the fields below stay, so what was typed is kept when switching */}
+          <div className="mt-7 min-h-[4.75rem]">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div key={mode} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
+                <h1 className="text-3xl font-semibold">{isLogin ? 'Welcome back' : 'Create your account'}</h1>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  {isLogin ? 'Log in to continue your job search.' : 'An email address and a password are all you need.'}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <form onSubmit={submit} noValidate className="mt-5">
+            {notice && isLogin && (
+              <Alert className="mb-4">
+                <AlertDescription>{notice}</AlertDescription>
+              </Alert>
+            )}
+            {error && (
+              <div className="mb-4">
+                <ErrorAlert message={error} />
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                ref={emailInput}
+                id="email"
+                name="email"
+                type="email"
+                inputMode="email"
+                // Password managers look for "username" on a login form and "email" on a sign-up form
+                autoComplete={isLogin ? 'username' : 'email'}
+                autoCapitalize="none"
+                spellCheck={false}
+                required
+                className="mt-1.5 h-11"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                onBlur={() => setTouched((current) => ({ ...current, email: true }))}
+                aria-invalid={showEmailError ? true : undefined}
+                aria-describedby={showEmailError ? 'email-error' : undefined}
+              />
+              {showEmailError && (
+                <p id="email-error" className={fieldError}>
+                  {emailError}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative mt-1.5">
+                <Input
+                  ref={passwordInput}
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  required
+                  minLength={isLogin ? undefined : MIN_PASSWORD_LENGTH}
+                  maxLength={MAX_PASSWORD_LENGTH}
+                  className="h-11 pr-12"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  onBlur={() => {
+                    setTouched((current) => ({ ...current, password: true }))
+                    setCapsLock(false)
+                  }}
+                  onKeyDown={watchCapsLock}
+                  onKeyUp={watchCapsLock}
+                  aria-invalid={showPasswordError ? true : undefined}
+                  aria-describedby={[showPasswordError ? 'password-error' : '', !isLogin ? 'password-strength' : ''].filter(Boolean).join(' ') || undefined}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((shown) => !shown)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-lg text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
-                  {isLogin ? 'Create one' : 'Log in'}
-                </Link>
-              </p>
-            </motion.div>
-          </AnimatePresence>
+                  {showPassword ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
+                </button>
+              </div>
+              {capsLock && (
+                <p className="mt-1.5 text-sm font-medium text-amber-800 dark:text-amber-300" role="status" data-testid="caps-lock">
+                  Caps Lock is on.
+                </p>
+              )}
+              {showPasswordError && (
+                <p id="password-error" className={fieldError}>
+                  {passwordError}
+                </p>
+              )}
+              {/* The strength meter grows in when the form turns into "Create account" */}
+              <AnimatePresence initial={false}>
+                {!isLogin && (
+                  <motion.div
+                    key="strength"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: 'easeOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-2.5">
+                      <StrengthMeter password={password} email={email} />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <MotionButton type="submit" disabled={working} className="mt-6 h-11 w-full text-base">
+              {phase === 'busy' && <Loader2 className="animate-spin" />}
+              {isLogin ? 'Log in' : 'Create account'}
+            </MotionButton>
+          </form>
+
+          <div className="mt-6 border-t pt-5">
+            <Button type="button" variant="outline" disabled={working} onClick={enterDemo} className="h-11 w-full text-base" data-testid="demo-login">
+              {phase === 'demo' && <Loader2 className="animate-spin" />}
+              Try with demo account
+            </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">No sign-up. A shared account with sample data that is reset every night.</p>
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }

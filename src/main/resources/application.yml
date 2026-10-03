@@ -43,6 +43,13 @@ ai:
     # Local models are slow, so wait a long time for the answer
     timeout: 180s
 
+# The shared demo account behind "Try with demo account"
+demo:
+  # false: no demo account is created and the demo login answers "not available"
+  enabled: true
+  # When the sample data is put back (Spring cron: second minute hour day month weekday). Here: every night at 03:00
+  reset-cron: "0 0 3 * * *"
+
 server:
   port: 8080
   tomcat:

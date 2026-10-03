@@ -146,4 +146,38 @@ class AuthServiceTest {
 		return user;
 	}
 
+	@Test
+	void demoLoginReturnsATokenForTheDemoUserWithoutAPassword() {
+		User demo = new User();
+		demo.setId(7L);
+		demo.setEmail("demo@jobassistant.example");
+		demo.setDemo(true);
+		when(userRepository.findByDemoTrue()).thenReturn(Optional.of(demo));
+		when(jwtService.generateToken(7L, "demo@jobassistant.example")).thenReturn("demo-token");
+		when(jwtService.getExpiration()).thenReturn(Duration.ofHours(1));
+
+		assertThat(authService.demoLogin().token()).isEqualTo("demo-token");
+	}
+
+	@Test
+	void demoLoginSaysSoWhenThereIsNoDemoAccount() {
+		when(userRepository.findByDemoTrue()).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> authService.demoLogin()).isInstanceOf(DemoUnavailableException.class);
+	}
+
+	@Test
+	void theDemoAccountCannotBeEnteredWithAPasswordEvenWithTheRightOne() {
+		User demo = new User();
+		demo.setId(7L);
+		demo.setEmail("demo@jobassistant.example");
+		demo.setPasswordHash(passwordEncoder.encode("the-right-password"));
+		demo.setDemo(true);
+		when(userRepository.findByEmail("demo@jobassistant.example")).thenReturn(Optional.of(demo));
+
+		assertThatThrownBy(() -> authService.login(new LoginRequest("demo@jobassistant.example", "the-right-password")))
+			.isInstanceOf(InvalidCredentialsException.class)
+			.hasMessage("Email or password is incorrect");
+	}
+
 }

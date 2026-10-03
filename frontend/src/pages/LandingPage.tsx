@@ -1,15 +1,20 @@
 import { ArrowRight } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
-import { lazy, useEffect, useRef, useState } from 'react'
+import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react'
+import { lazy, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import BackpackFallback from '../components/BackpackFallback.tsx'
+import ArchitectureDiagram from '../components/home/ArchitectureDiagram.tsx'
+import BuiltBy from '../components/home/BuiltBy.tsx'
+import CursorLight from '../components/home/CursorLight.tsx'
+import LetterCompare from '../components/home/LetterCompare.tsx'
+import Magnetic from '../components/home/Magnetic.tsx'
+import TryItDemo from '../components/home/TryItDemo.tsx'
 import Lazy3D from '../components/Lazy3D.tsx'
 import Logo from '../components/Logo.tsx'
 import MotionButton from '../components/MotionButton.tsx'
-import ScoreRing from '../components/ScoreRing.tsx'
 import StoryStepArt from '../components/StoryStepArt.tsx'
 import ThemeToggle from '../components/ThemeToggle.tsx'
-import { popItem, staggerItem, staggerList } from '../lib/motion.ts'
+import { staggerItem, staggerList } from '../lib/motion.ts'
 import { webglSupported } from '../three/support.ts'
 
 // The 3D code is a separate download that starts only when the hero scene is about to be shown
@@ -38,79 +43,6 @@ const STEPS = [
 
 const SCENE_LABEL =
   'A leather backpack with skills orbiting around it. While you scroll through the three steps, a resume slides into the backpack, the matching skills light up, and a score ring fills to 82 out of 100.'
-
-const EXAMPLES = [
-  { job: 'Backend Developer · Acme GmbH', score: 82, label: 'Strong match', tone: 'text-emerald-700 dark:text-emerald-400', matching: ['Java', 'Spring Boot', 'PostgreSQL', 'Docker'], missing: ['Kubernetes'] },
-  { job: 'Data Engineer · Northwind', score: 61, label: 'Partial match', tone: 'text-amber-700 dark:text-amber-400', matching: ['Python', 'SQL', 'Git'], missing: ['Spark', 'Airflow'] },
-  { job: 'iOS Developer · Lumen Labs', score: 34, label: 'Weak match', tone: 'text-rose-700 dark:text-rose-400', matching: ['Git', 'REST APIs'], missing: ['Swift', 'SwiftUI', 'Xcode'] },
-]
-
-// Made-up examples of the analysis result, so visitors see what they will get.
-// It moves on to the next example every few seconds; with "reduce motion" it stays on the first.
-function PreviewCard() {
-  const reducedMotion = useReducedMotion()
-  const [index, setIndex] = useState(0)
-  const example = EXAMPLES[index]
-
-  useEffect(() => {
-    if (reducedMotion) return
-    const timer = setInterval(() => setIndex((current) => (current + 1) % EXAMPLES.length), 4500)
-    return () => clearInterval(timer)
-  }, [reducedMotion])
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24, rotate: 0 }}
-      animate={{ opacity: 1, y: 0, rotate: 1.5 }}
-      transition={{ duration: 0.4, delay: 0.1, ease: 'easeOut' }}
-      className="relative w-full max-w-md rounded-2xl border bg-card p-6 shadow-pop"
-      aria-label="Example of a match analysis"
-    >
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Example analysis</p>
-      {/* The key changes with the example, so the old content fades out and the new one animates in */}
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={example.job}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: 0.2 }}
-        >
-          <p className="mt-1 text-base font-semibold">{example.job}</p>
-          <div className="mt-5 flex items-center gap-5">
-            <ScoreRing score={example.score} />
-            <div>
-              <p className={`text-lg font-semibold ${example.tone}`}>{example.label}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {example.matching.length} matching and {example.missing.length} missing skills found.
-              </p>
-            </div>
-          </div>
-          <motion.ul variants={staggerList} initial="hidden" animate="show" className="mt-5 flex min-h-16 flex-wrap content-start gap-2">
-            {example.matching.map((skill) => (
-              <motion.li
-                key={skill}
-                variants={popItem}
-                className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/25 dark:text-emerald-300"
-              >
-                {skill}
-              </motion.li>
-            ))}
-            {example.missing.map((skill) => (
-              <motion.li
-                key={skill}
-                variants={popItem}
-                className="rounded-full bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300"
-              >
-                {skill}
-              </motion.li>
-            ))}
-          </motion.ul>
-        </motion.div>
-      </AnimatePresence>
-    </motion.div>
-  )
-}
 
 // The hero background: three soft color blobs that drift slowly (a "gradient mesh").
 // Decorative only, so it is hidden from screen readers.
@@ -148,14 +80,16 @@ function HeroText() {
         to work on, and drafts the cover letter.
       </motion.p>
       <motion.div variants={staggerItem} className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-        <MotionButton asChild className="h-12 px-6 text-base">
-          <Link to="/register">
-            Create your account <ArrowRight />
-          </Link>
-        </MotionButton>
-        <Link to="/login" className="rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
-          I already have an account
-        </Link>
+        <Magnetic>
+          <MotionButton asChild className="h-12 px-6 text-base">
+            <Link to="/register">
+              Create your account <ArrowRight />
+            </Link>
+          </MotionButton>
+        </Magnetic>
+        <a href="#try" className="rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
+          Try a sample first
+        </a>
       </motion.div>
       <motion.p variants={staggerItem} className="mt-6 text-sm text-muted-foreground">
         The analysis runs on a local AI model, not on a cloud AI service.
@@ -193,6 +127,7 @@ function ScrollStory() {
   return (
     <div className="relative isolate">
       <HeroBackground />
+      <CursorLight />
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:grid lg:grid-cols-2 lg:gap-x-12">
         <div className="py-14 lg:flex lg:min-h-[calc(100svh-4rem)] lg:items-center lg:py-0">
           <HeroText />
@@ -239,6 +174,7 @@ function StaticStory() {
     <>
       <section className="relative isolate overflow-hidden">
         <HeroBackground />
+        <CursorLight />
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-14 sm:px-6 lg:grid-cols-2 lg:py-24">
           <HeroText />
           <Lazy3D
@@ -299,21 +235,9 @@ export default function LandingPage() {
       <main id="main">
         <Story />
 
-        {/* What an analysis looks like */}
-        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pt-16 sm:px-6 lg:grid-cols-2" aria-labelledby="preview-heading">
-          <div className="flex justify-center lg:order-2 lg:justify-end">
-            <PreviewCard />
-          </div>
-          <div>
-            <h2 id="preview-heading" className="font-display text-3xl font-semibold leading-tight sm:text-4xl">
-              One number, and the reasons behind it
-            </h2>
-            <p className="mt-4 max-w-md leading-relaxed text-muted-foreground">
-              Every analysis gives a score from 0 to 100, the skills that match, the skills that are missing, and
-              three tips for your resume. You can check each skill against the job posting yourself.
-            </p>
-          </div>
-        </section>
+        <TryItDemo />
+
+        <LetterCompare />
 
         {/* What it does: a heading on the left, three plain entries on the right, divided by hairlines */}
         <section className="mx-auto grid max-w-6xl gap-x-16 gap-y-8 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_1.6fr]" aria-labelledby="features-heading">
@@ -336,20 +260,31 @@ export default function LandingPage() {
           </motion.ul>
         </section>
 
-        {/* Closing call to action */}
-        <section className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
-          <h2 className="max-w-2xl font-display text-3xl font-semibold leading-tight sm:text-4xl">
-            Your next application can start with a clear picture.
-          </h2>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-            <MotionButton asChild className="h-12 px-6 text-base">
-              <Link to="/register">
-                Create your account <ArrowRight />
-              </Link>
-            </MotionButton>
-            <Link to="/login" className="rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
-              Log in
-            </Link>
+        <div className="border-t">
+          <ArchitectureDiagram />
+        </div>
+
+        {/* Closing: the call to action, and who built this */}
+        <section className="border-t bg-muted/50">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.3fr_1fr]">
+            <div>
+              <h2 className="max-w-2xl font-display text-3xl font-semibold leading-tight sm:text-4xl">
+                Your next application can start with a clear picture.
+              </h2>
+              <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <Magnetic>
+                  <MotionButton asChild className="h-12 px-6 text-base">
+                    <Link to="/register">
+                      Create your account <ArrowRight />
+                    </Link>
+                  </MotionButton>
+                </Magnetic>
+                <Link to="/login" className="rounded text-base font-medium text-foreground underline decoration-primary/40 decoration-2 underline-offset-4 hover:decoration-primary">
+                  Log in
+                </Link>
+              </div>
+            </div>
+            <BuiltBy />
           </div>
         </section>
       </main>

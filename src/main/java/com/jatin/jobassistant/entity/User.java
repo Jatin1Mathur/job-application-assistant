@@ -32,6 +32,10 @@ public class User {
 	@Column(nullable = false, length = 100)
 	private String passwordHash;
 
+	// True only for the shared demo account. The database refuses to delete that row or to change its password
+	@Column(nullable = false, updatable = false)
+	private boolean demo;
+
 	@CreationTimestamp
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;

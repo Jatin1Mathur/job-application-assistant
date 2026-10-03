@@ -383,6 +383,13 @@ An empty state has three parts: an icon in a quiet tile, one sentence that says 
 - Gaps are "skills to work on", not failures.
 - Do not promise what the product cannot check. The cover letter note says "Read it through and check the facts before you send it."
 
+## Home and login patterns
+
+- **Samples are labelled.** Anything on a public page that looks like a result but is not one carries a sand-coloured label that says so ("Sample result, not a live analysis").
+- **Pointer effects are extras.** The cursor-follow light and the magnetic pull of primary buttons exist only for a mouse or trackpad without reduced motion. They never carry information.
+- **Auth is one form.** Log in and Create account share the fields; a segmented switch moves between them and the typed values stay. Errors sit under their field, in words. The login error is always "Email or password is incorrect".
+- **Success is confirmed.** A drawn check mark for about one second before the app opens.
+
 ## Do's and don'ts
 
 ### Do

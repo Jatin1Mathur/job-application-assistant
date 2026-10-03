@@ -22,6 +22,7 @@ import com.jatin.jobassistant.dto.ErrorResponse;
 import com.jatin.jobassistant.service.AiTimeoutException;
 import com.jatin.jobassistant.service.AiUnavailableException;
 import com.jatin.jobassistant.service.ApplicationNotFoundException;
+import com.jatin.jobassistant.service.DemoUnavailableException;
 import com.jatin.jobassistant.service.EmailAlreadyUsedException;
 import com.jatin.jobassistant.service.InvalidAiResponseException;
 import com.jatin.jobassistant.service.InvalidAnalysisRequestException;
@@ -48,6 +49,12 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(EmailAlreadyUsedException.class)
 	public ResponseEntity<ErrorResponse> handleEmailAlreadyUsed(EmailAlreadyUsedException ex) {
 		return error(HttpStatus.CONFLICT, ex.getMessage());
+	}
+
+	// The demo account is switched off or was not created yet
+	@ExceptionHandler(DemoUnavailableException.class)
+	public ResponseEntity<ErrorResponse> handleDemoUnavailable(DemoUnavailableException ex) {
+		return error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
 	}
 
 	// Wrong email or password at login

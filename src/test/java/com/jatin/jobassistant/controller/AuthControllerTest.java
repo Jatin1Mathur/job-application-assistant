@@ -27,6 +27,7 @@ import com.jatin.jobassistant.dto.UserResponse;
 import com.jatin.jobassistant.security.JwtService;
 import com.jatin.jobassistant.security.SecurityConfig;
 import com.jatin.jobassistant.service.AuthService;
+import com.jatin.jobassistant.service.DemoUnavailableException;
 import com.jatin.jobassistant.service.EmailAlreadyUsedException;
 import com.jatin.jobassistant.service.InvalidCredentialsException;
 
@@ -129,6 +130,24 @@ class AuthControllerTest {
 	void anyOtherUrlNeedsAToken() throws Exception {
 		mockMvc.perform(get("/api/resumes/1")).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/actuator/health")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void demoLoginIsPublicAndNeedsNoBody() throws Exception {
+		when(authService.demoLogin()).thenReturn(new LoginResponse("demo-token", "Bearer", 3600));
+
+		mockMvc.perform(post("/api/auth/demo"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.token").value("demo-token"));
+	}
+
+	@Test
+	void demoLoginAnswers503WhenTheDemoAccountIsSwitchedOff() throws Exception {
+		when(authService.demoLogin()).thenThrow(new DemoUnavailableException());
+
+		mockMvc.perform(post("/api/auth/demo"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.message").value(containsString("demo account is not available")));
 	}
 
 }

@@ -15,4 +15,7 @@ public interface ResumeRepository extends JpaRepository<Resume, Long> {
 	// This user's resumes, newest first
 	List<Resume> findByUserIdOrderByCreatedAtDescIdDesc(Long userId);
 
+	// Used when the demo account is reset
+	void deleteByUserId(Long userId);
+
 }
