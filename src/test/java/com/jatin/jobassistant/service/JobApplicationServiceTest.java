@@ -39,6 +39,10 @@ import com.jatin.jobassistant.repository.ResumeRepository;
 @ExtendWith(MockitoExtension.class)
 class JobApplicationServiceTest {
 
+	private static final Long USER_ID = 1L;
+
+	private static final Long OTHER_USER_ID = 2L;
+
 	private static final String JOB_DESCRIPTION = "We need a Java Backend Developer with Spring Boot, REST APIs, PostgreSQL, Docker and unit testing experience.";
 
 	@Mock
@@ -67,22 +71,58 @@ class JobApplicationServiceTest {
 		});
 
 		ApplicationResponse response = jobApplicationService
-			.create(new CreateApplicationRequest(" Acme ", "Java Developer", "  " + JOB_DESCRIPTION + "\n"));
+			.create(USER_ID, new CreateApplicationRequest(" Acme ", "Java Developer", "  " + JOB_DESCRIPTION + "\n"));
 
 		assertThat(response.id()).isEqualTo(1L);
 		assertThat(response.companyName()).isEqualTo("Acme");
 		assertThat(response.jobTitle()).isEqualTo("Java Developer");
 		assertThat(response.jobDescription()).isEqualTo(JOB_DESCRIPTION);
 		assertThat(response.status()).isEqualTo(ApplicationStatus.SAVED);
+
+		ArgumentCaptor<JobApplication> saved = ArgumentCaptor.forClass(JobApplication.class);
+		verify(jobApplicationRepository).save(saved.capture());
+		assertThat(saved.getValue().getUserId()).isEqualTo(USER_ID);
+	}
+
+	// The application exists, but the query "id AND user id" finds nothing for a different user
+	@Test
+	void anotherUserCannotReadChangeOrDeleteTheApplication() {
+		when(jobApplicationRepository.findByIdAndUserId(7L, OTHER_USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> jobApplicationService.getById(OTHER_USER_ID, 7L))
+			.isInstanceOf(ApplicationNotFoundException.class);
+		assertThatThrownBy(() -> jobApplicationService.updateStatus(OTHER_USER_ID, 7L, ApplicationStatus.APPLIED))
+			.isInstanceOf(ApplicationNotFoundException.class);
+		assertThatThrownBy(() -> jobApplicationService.delete(OTHER_USER_ID, 7L))
+			.isInstanceOf(ApplicationNotFoundException.class);
+		assertThatThrownBy(() -> jobApplicationService.analyze(OTHER_USER_ID, 7L, 2L))
+			.isInstanceOf(ApplicationNotFoundException.class);
+		verify(jobApplicationRepository, never()).save(any());
+		verify(jobApplicationRepository, never()).delete(any());
+		verifyNoInteractions(aiService, matchAnalysisCache);
+	}
+
+	@Test
+	void analyzeCannotUseAResumeOfAnotherUser() {
+		JobApplication application = application(7L, ApplicationStatus.SAVED);
+		application.setJobDescription(JOB_DESCRIPTION);
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		// Resume 5 belongs to someone else, so it is not found for this user
+		when(resumeRepository.findByIdAndUserId(5L, USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 7L, 5L))
+			.isInstanceOf(ResumeNotFoundException.class);
+		verifyNoInteractions(aiService, matchAnalysisCache);
 	}
 
 	@Test
 	void listWithoutStatusReturnsAllNewestFirst() {
-		when(jobApplicationRepository.findAll(any(Pageable.class))).thenAnswer(invocation -> new PageImpl<>(
+		when(jobApplicationRepository.findByUserId(eq(USER_ID), any(Pageable.class)))
+			.thenAnswer(invocation -> new PageImpl<>(
 				List.of(application(2L, ApplicationStatus.APPLIED), application(1L, ApplicationStatus.SAVED)),
-				invocation.getArgument(0), 5));
+				invocation.getArgument(1), 5));
 
-		PageResponse<ApplicationResponse> response = jobApplicationService.list(null, 0, 2);
+		PageResponse<ApplicationResponse> response = jobApplicationService.list(USER_ID, null, 0, 2);
 
 		assertThat(response.content()).extracting(ApplicationResponse::id).containsExactly(2L, 1L);
 		assertThat(response.page()).isZero();
@@ -91,46 +131,47 @@ class JobApplicationServiceTest {
 		assertThat(response.totalPages()).isEqualTo(3);
 
 		ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-		verify(jobApplicationRepository).findAll(pageable.capture());
+		verify(jobApplicationRepository).findByUserId(eq(USER_ID), pageable.capture());
 		assertThat(pageable.getValue().getSort().getOrderFor("createdAt").getDirection())
 			.isEqualTo(Sort.Direction.DESC);
 	}
 
 	@Test
 	void listWithStatusFiltersByStatus() {
-		when(jobApplicationRepository.findByStatus(eq(ApplicationStatus.APPLIED), any(Pageable.class)))
+		when(jobApplicationRepository.findByUserIdAndStatus(eq(USER_ID), eq(ApplicationStatus.APPLIED),
+				any(Pageable.class)))
 			.thenReturn(new PageImpl<>(List.of(application(2L, ApplicationStatus.APPLIED)), PageRequest.of(1, 10),
 					11));
 
-		PageResponse<ApplicationResponse> response = jobApplicationService.list(ApplicationStatus.APPLIED, 1, 10);
+		PageResponse<ApplicationResponse> response = jobApplicationService.list(USER_ID, ApplicationStatus.APPLIED, 1, 10);
 
 		assertThat(response.content()).hasSize(1);
 		assertThat(response.content().get(0).status()).isEqualTo(ApplicationStatus.APPLIED);
 		assertThat(response.page()).isEqualTo(1);
-		verify(jobApplicationRepository, never()).findAll(any(Pageable.class));
+		verify(jobApplicationRepository, never()).findByUserId(any(), any(Pageable.class));
 	}
 
 	@Test
 	void getByIdReturnsApplication() {
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
 
-		assertThat(jobApplicationService.getById(7L).id()).isEqualTo(7L);
+		assertThat(jobApplicationService.getById(USER_ID, 7L).id()).isEqualTo(7L);
 	}
 
 	@Test
 	void getByIdThrowsWhenApplicationDoesNotExist() {
-		when(jobApplicationRepository.findById(99L)).thenReturn(Optional.empty());
+		when(jobApplicationRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> jobApplicationService.getById(99L)).isInstanceOf(ApplicationNotFoundException.class)
+		assertThatThrownBy(() -> jobApplicationService.getById(USER_ID, 99L)).isInstanceOf(ApplicationNotFoundException.class)
 			.hasMessageContaining("99");
 	}
 
 	@Test
 	void updateStatusChangesOnlyTheStatus() {
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
 		when(jobApplicationRepository.save(any(JobApplication.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-		ApplicationResponse response = jobApplicationService.updateStatus(7L, ApplicationStatus.INTERVIEW);
+		ApplicationResponse response = jobApplicationService.updateStatus(USER_ID, 7L, ApplicationStatus.INTERVIEW);
 
 		assertThat(response.status()).isEqualTo(ApplicationStatus.INTERVIEW);
 		assertThat(response.companyName()).isEqualTo("Company 7");
@@ -138,9 +179,9 @@ class JobApplicationServiceTest {
 
 	@Test
 	void updateStatusThrowsWhenApplicationDoesNotExist() {
-		when(jobApplicationRepository.findById(99L)).thenReturn(Optional.empty());
+		when(jobApplicationRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> jobApplicationService.updateStatus(99L, ApplicationStatus.APPLIED))
+		assertThatThrownBy(() -> jobApplicationService.updateStatus(USER_ID, 99L, ApplicationStatus.APPLIED))
 			.isInstanceOf(ApplicationNotFoundException.class);
 		verify(jobApplicationRepository, never()).save(any());
 	}
@@ -148,18 +189,18 @@ class JobApplicationServiceTest {
 	@Test
 	void deleteRemovesApplication() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
 
-		jobApplicationService.delete(7L);
+		jobApplicationService.delete(USER_ID, 7L);
 
 		verify(jobApplicationRepository).delete(application);
 	}
 
 	@Test
 	void deleteThrowsWhenApplicationDoesNotExist() {
-		when(jobApplicationRepository.findById(99L)).thenReturn(Optional.empty());
+		when(jobApplicationRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> jobApplicationService.delete(99L)).isInstanceOf(ApplicationNotFoundException.class);
+		assertThatThrownBy(() -> jobApplicationService.delete(USER_ID, 99L)).isInstanceOf(ApplicationNotFoundException.class);
 		verify(jobApplicationRepository, never()).delete(any());
 	}
 
@@ -167,14 +208,14 @@ class JobApplicationServiceTest {
 	void analyzeSendsTextsToTheAiAndSavesTheScore() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription(JOB_DESCRIPTION);
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		MatchAnalysisResponse analysis = new MatchAnalysisResponse(80, List.of("Java"), List.of("Spring Boot"),
 				List.of("tip 1", "tip 2", "tip 3"));
 		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
 		when(aiService.analyzeMatch("I know Java", JOB_DESCRIPTION)).thenReturn(analysis);
 
-		MatchAnalysisResult result = jobApplicationService.analyze(7L, 2L);
+		MatchAnalysisResult result = jobApplicationService.analyze(USER_ID, 7L, 2L);
 
 		assertThat(result.analysis()).isEqualTo(analysis);
 		assertThat(result.fromCache()).isFalse();
@@ -187,13 +228,13 @@ class JobApplicationServiceTest {
 	void analyzeReturnsTheCachedResultWithoutCallingTheAi() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription(JOB_DESCRIPTION);
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		MatchAnalysisResponse cached = new MatchAnalysisResponse(80, List.of("Java"), List.of("Spring Boot"),
 				List.of("tip 1", "tip 2", "tip 3"));
 		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.of(cached));
 
-		MatchAnalysisResult result = jobApplicationService.analyze(7L, 2L);
+		MatchAnalysisResult result = jobApplicationService.analyze(USER_ID, 7L, 2L);
 
 		assertThat(result.analysis()).isEqualTo(cached);
 		assertThat(result.fromCache()).isTrue();
@@ -206,10 +247,10 @@ class JobApplicationServiceTest {
 	void analyzeRejectsJobDescriptionShorterThan100Characters() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription("Java and Spring Boot");
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 
-		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L))
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 7L, 2L))
 			.isInstanceOf(InvalidAnalysisRequestException.class)
 			.hasMessageContaining("at least 100 characters");
 		verifyNoInteractions(aiService, matchAnalysisCache);
@@ -219,10 +260,10 @@ class JobApplicationServiceTest {
 	void generateCoverLetterRejectsJobDescriptionShorterThan100Characters() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription("x".repeat(99));
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 
-		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 2L))
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L))
 			.isInstanceOf(InvalidAnalysisRequestException.class)
 			.hasMessageContaining("at least 100 characters");
 		verifyNoInteractions(aiService);
@@ -230,28 +271,28 @@ class JobApplicationServiceTest {
 
 	@Test
 	void analyzeThrowsWhenApplicationDoesNotExist() {
-		when(jobApplicationRepository.findById(99L)).thenReturn(Optional.empty());
+		when(jobApplicationRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> jobApplicationService.analyze(99L, 2L))
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 99L, 2L))
 			.isInstanceOf(ApplicationNotFoundException.class);
 		verifyNoInteractions(aiService);
 	}
 
 	@Test
 	void analyzeThrowsWhenResumeDoesNotExist() {
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
-		when(resumeRepository.findById(99L)).thenReturn(Optional.empty());
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 99L)).isInstanceOf(ResumeNotFoundException.class);
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 7L, 99L)).isInstanceOf(ResumeNotFoundException.class);
 		verifyNoInteractions(aiService);
 	}
 
 	@Test
 	void analyzeThrowsWhenApplicationHasNoJobDescription() {
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 
-		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L))
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 7L, 2L))
 			.isInstanceOf(InvalidAnalysisRequestException.class)
 			.hasMessageContaining("job description");
 		verifyNoInteractions(aiService);
@@ -261,12 +302,12 @@ class JobApplicationServiceTest {
 	void analyzeDoesNotSaveAScoreWhenTheAiFails() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription(JOB_DESCRIPTION);
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		when(matchAnalysisCache.get(2L, 7L, JOB_DESCRIPTION)).thenReturn(Optional.empty());
 		when(aiService.analyzeMatch(any(), any())).thenThrow(new AiUnavailableException("down", null));
 
-		assertThatThrownBy(() -> jobApplicationService.analyze(7L, 2L)).isInstanceOf(AiUnavailableException.class);
+		assertThatThrownBy(() -> jobApplicationService.analyze(USER_ID, 7L, 2L)).isInstanceOf(AiUnavailableException.class);
 		assertThat(application.getMatchScore()).isNull();
 		verify(jobApplicationRepository, never()).save(any());
 		// Errors must not be cached, or every later call would get the same error for 24 hours
@@ -277,12 +318,12 @@ class JobApplicationServiceTest {
 	void generateCoverLetterSendsDetailsToTheAiAndSavesTheLetter() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription(JOB_DESCRIPTION);
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		when(aiService.generateCoverLetter("I know Java", "Developer", "Company 7", JOB_DESCRIPTION))
 			.thenReturn("Dear Hiring Manager, ...");
 
-		CoverLetterResponse response = jobApplicationService.generateCoverLetter(7L, 2L);
+		CoverLetterResponse response = jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L);
 
 		assertThat(response.applicationId()).isEqualTo(7L);
 		assertThat(response.coverLetter()).isEqualTo("Dear Hiring Manager, ...");
@@ -292,20 +333,20 @@ class JobApplicationServiceTest {
 
 	@Test
 	void generateCoverLetterThrowsWhenResumeDoesNotExist() {
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
-		when(resumeRepository.findById(99L)).thenReturn(Optional.empty());
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 99L))
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(USER_ID, 7L, 99L))
 			.isInstanceOf(ResumeNotFoundException.class);
 		verifyNoInteractions(aiService);
 	}
 
 	@Test
 	void generateCoverLetterThrowsWhenApplicationHasNoJobDescription() {
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application(7L, ApplicationStatus.SAVED)));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 
-		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 2L))
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L))
 			.isInstanceOf(InvalidAnalysisRequestException.class);
 		verifyNoInteractions(aiService);
 	}
@@ -314,11 +355,11 @@ class JobApplicationServiceTest {
 	void generateCoverLetterDoesNotSaveWhenTheAiFails() {
 		JobApplication application = application(7L, ApplicationStatus.SAVED);
 		application.setJobDescription(JOB_DESCRIPTION);
-		when(jobApplicationRepository.findById(7L)).thenReturn(Optional.of(application));
-		when(resumeRepository.findById(2L)).thenReturn(Optional.of(resume(2L, "I know Java")));
+		when(jobApplicationRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(application));
+		when(resumeRepository.findByIdAndUserId(2L, USER_ID)).thenReturn(Optional.of(resume(2L, "I know Java")));
 		when(aiService.generateCoverLetter(any(), any(), any(), any())).thenThrow(new AiTimeoutException("slow", null));
 
-		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(7L, 2L))
+		assertThatThrownBy(() -> jobApplicationService.generateCoverLetter(USER_ID, 7L, 2L))
 			.isInstanceOf(AiTimeoutException.class);
 		assertThat(application.getCoverLetter()).isNull();
 		verify(jobApplicationRepository, never()).save(any());

@@ -37,8 +37,9 @@ public class JobApplicationService {
 
 	private final MatchAnalysisCache matchAnalysisCache;
 
-	public ApplicationResponse create(CreateApplicationRequest request) {
+	public ApplicationResponse create(Long userId, CreateApplicationRequest request) {
 		JobApplication application = new JobApplication();
+		application.setUserId(userId);
 		application.setCompanyName(request.companyName().strip());
 		application.setJobTitle(request.jobTitle().strip());
 		application.setJobDescription(request.jobDescription().strip());
@@ -46,26 +47,27 @@ public class JobApplicationService {
 		return ApplicationResponse.from(jobApplicationRepository.save(application));
 	}
 
-	public PageResponse<ApplicationResponse> list(ApplicationStatus status, int page, int size) {
+	public PageResponse<ApplicationResponse> list(Long userId, ApplicationStatus status, int page, int size) {
 		Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
-		Page<JobApplication> applications = status == null ? jobApplicationRepository.findAll(pageable)
-				: jobApplicationRepository.findByStatus(status, pageable);
+		Page<JobApplication> applications = status == null
+				? jobApplicationRepository.findByUserId(userId, pageable)
+				: jobApplicationRepository.findByUserIdAndStatus(userId, status, pageable);
 		return PageResponse.from(applications.map(ApplicationResponse::from));
 	}
 
-	public ApplicationResponse getById(Long id) {
-		return ApplicationResponse.from(find(id));
+	public ApplicationResponse getById(Long userId, Long id) {
+		return ApplicationResponse.from(find(userId, id));
 	}
 
-	public ApplicationResponse updateStatus(Long id, ApplicationStatus status) {
-		JobApplication application = find(id);
+	public ApplicationResponse updateStatus(Long userId, Long id, ApplicationStatus status) {
+		JobApplication application = find(userId, id);
 		application.setStatus(status);
 		return ApplicationResponse.from(jobApplicationRepository.save(application));
 	}
 
-	public MatchAnalysisResult analyze(Long id, Long resumeId) {
-		JobApplication application = find(id);
-		Resume resume = findResumeFor(application, resumeId);
+	public MatchAnalysisResult analyze(Long userId, Long id, Long resumeId) {
+		JobApplication application = find(userId, id);
+		Resume resume = findResumeFor(userId, application, resumeId);
 		String jobDescription = application.getJobDescription();
 
 		Optional<MatchAnalysisResponse> cached = matchAnalysisCache.get(resumeId, id, jobDescription);
@@ -81,9 +83,9 @@ public class JobApplicationService {
 		return new MatchAnalysisResult(analysis, cached.isPresent());
 	}
 
-	public CoverLetterResponse generateCoverLetter(Long id, Long resumeId) {
-		JobApplication application = find(id);
-		Resume resume = findResumeFor(application, resumeId);
+	public CoverLetterResponse generateCoverLetter(Long userId, Long id, Long resumeId) {
+		JobApplication application = find(userId, id);
+		Resume resume = findResumeFor(userId, application, resumeId);
 
 		String coverLetter = aiService.generateCoverLetter(resume.getExtractedText(), application.getJobTitle(),
 				application.getCompanyName(), application.getJobDescription());
@@ -92,13 +94,14 @@ public class JobApplicationService {
 		return new CoverLetterResponse(application.getId(), coverLetter);
 	}
 
-	public void delete(Long id) {
-		jobApplicationRepository.delete(find(id));
+	public void delete(Long userId, Long id) {
+		jobApplicationRepository.delete(find(userId, id));
 	}
 
 	// Loads the resume and makes sure both texts the AI needs are there
-	private Resume findResumeFor(JobApplication application, Long resumeId) {
-		Resume resume = resumeRepository.findById(resumeId).orElseThrow(() -> new ResumeNotFoundException(resumeId));
+	private Resume findResumeFor(Long userId, JobApplication application, Long resumeId) {
+		Resume resume = resumeRepository.findByIdAndUserId(resumeId, userId)
+			.orElseThrow(() -> new ResumeNotFoundException(resumeId));
 		String jobDescription = application.getJobDescription();
 		if (isBlank(jobDescription)) {
 			throw new InvalidAnalysisRequestException("This application has no job description for the AI to use");
@@ -118,8 +121,10 @@ public class JobApplicationService {
 		return text == null || text.isBlank();
 	}
 
-	private JobApplication find(Long id) {
-		return jobApplicationRepository.findById(id).orElseThrow(() -> new ApplicationNotFoundException(id));
+	// An application of another user is reported as "not found", the same as one that does not exist
+	private JobApplication find(Long userId, Long id) {
+		return jobApplicationRepository.findByIdAndUserId(id, userId)
+			.orElseThrow(() -> new ApplicationNotFoundException(id));
 	}
 
 }

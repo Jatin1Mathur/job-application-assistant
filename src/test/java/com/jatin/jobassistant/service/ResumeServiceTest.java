@@ -19,6 +19,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +33,10 @@ import com.jatin.jobassistant.repository.ResumeRepository;
 @ExtendWith(MockitoExtension.class)
 class ResumeServiceTest {
 
+	private static final Long USER_ID = 1L;
+
+	private static final Long OTHER_USER_ID = 2L;
+
 	@Mock
 	private ResumeRepository resumeRepository;
 
@@ -43,7 +48,7 @@ class ResumeServiceTest {
 		savingAssignsIdAndCreatedAt();
 		MockMultipartFile file = pdfFile("resume.pdf", pdfWithText("Jatin Mathur - Java Developer"));
 
-		ResumeUploadResponse response = resumeService.upload(file);
+		ResumeUploadResponse response = resumeService.upload(USER_ID, file);
 
 		assertThat(response.id()).isEqualTo(1L);
 		assertThat(response.fileName()).isEqualTo("resume.pdf");
@@ -57,14 +62,14 @@ class ResumeServiceTest {
 		String longText = "abcdefghij".repeat(5);
 		MockMultipartFile file = pdfFile("resume.pdf", pdfWithText(longText, longText, longText, longText, longText));
 
-		ResumeUploadResponse response = resumeService.upload(file);
+		ResumeUploadResponse response = resumeService.upload(USER_ID, file);
 
 		assertThat(response.textPreview()).hasSize(200);
 	}
 
 	@Test
 	void uploadRejectsMissingFile() {
-		assertThatThrownBy(() -> resumeService.upload(null)).isInstanceOf(InvalidFileException.class);
+		assertThatThrownBy(() -> resumeService.upload(USER_ID, null)).isInstanceOf(InvalidFileException.class);
 		verify(resumeRepository, never()).save(any());
 	}
 
@@ -72,7 +77,7 @@ class ResumeServiceTest {
 	void uploadRejectsEmptyFile() {
 		MockMultipartFile file = pdfFile("resume.pdf", new byte[0]);
 
-		assertThatThrownBy(() -> resumeService.upload(file)).isInstanceOf(InvalidFileException.class);
+		assertThatThrownBy(() -> resumeService.upload(USER_ID, file)).isInstanceOf(InvalidFileException.class);
 		verify(resumeRepository, never()).save(any());
 	}
 
@@ -80,7 +85,7 @@ class ResumeServiceTest {
 	void uploadRejectsFileThatIsNotAPdf() {
 		MockMultipartFile file = new MockMultipartFile("file", "notes.txt", "text/plain", "hello".getBytes());
 
-		assertThatThrownBy(() -> resumeService.upload(file)).isInstanceOf(InvalidFileException.class)
+		assertThatThrownBy(() -> resumeService.upload(USER_ID, file)).isInstanceOf(InvalidFileException.class)
 			.hasMessage("Only PDF files are allowed");
 		verify(resumeRepository, never()).save(any());
 	}
@@ -89,7 +94,7 @@ class ResumeServiceTest {
 	void uploadRejectsTextFileRenamedToPdf() {
 		MockMultipartFile file = pdfFile("fake.pdf", "this is not really a pdf".getBytes());
 
-		assertThatThrownBy(() -> resumeService.upload(file)).isInstanceOf(InvalidFileException.class)
+		assertThatThrownBy(() -> resumeService.upload(USER_ID, file)).isInstanceOf(InvalidFileException.class)
 			.hasMessage("Only PDF files are allowed");
 	}
 
@@ -97,7 +102,7 @@ class ResumeServiceTest {
 	void uploadRejectsFileLargerThan5Mb() {
 		MockMultipartFile file = pdfFile("big.pdf", new byte[(int) ResumeService.MAX_FILE_SIZE_BYTES + 1]);
 
-		assertThatThrownBy(() -> resumeService.upload(file)).isInstanceOf(InvalidFileException.class)
+		assertThatThrownBy(() -> resumeService.upload(USER_ID, file)).isInstanceOf(InvalidFileException.class)
 			.hasMessageContaining("5 MB");
 		verify(resumeRepository, never()).save(any());
 	}
@@ -106,7 +111,7 @@ class ResumeServiceTest {
 	void uploadRejectsCorruptedPdf() {
 		MockMultipartFile file = pdfFile("broken.pdf", "%PDF-1.7 garbage".getBytes());
 
-		assertThatThrownBy(() -> resumeService.upload(file)).isInstanceOf(InvalidFileException.class)
+		assertThatThrownBy(() -> resumeService.upload(USER_ID, file)).isInstanceOf(InvalidFileException.class)
 			.hasMessageContaining("Could not read the PDF");
 	}
 
@@ -117,9 +122,9 @@ class ResumeServiceTest {
 		resume.setFileName("resume.pdf");
 		resume.setExtractedText("full text");
 		resume.setCreatedAt(Instant.now());
-		when(resumeRepository.findById(7L)).thenReturn(Optional.of(resume));
+		when(resumeRepository.findByIdAndUserId(7L, USER_ID)).thenReturn(Optional.of(resume));
 
-		ResumeResponse response = resumeService.getById(7L);
+		ResumeResponse response = resumeService.getById(USER_ID, 7L);
 
 		assertThat(response.id()).isEqualTo(7L);
 		assertThat(response.fileName()).isEqualTo("resume.pdf");
@@ -127,10 +132,30 @@ class ResumeServiceTest {
 	}
 
 	@Test
-	void getByIdThrowsWhenResumeDoesNotExist() {
-		when(resumeRepository.findById(99L)).thenReturn(Optional.empty());
+	void uploadSavesTheResumeForTheLoggedInUser() throws IOException {
+		savingAssignsIdAndCreatedAt();
 
-		assertThatThrownBy(() -> resumeService.getById(99L)).isInstanceOf(ResumeNotFoundException.class)
+		resumeService.upload(USER_ID, pdfFile("resume.pdf", pdfWithText("Java Developer")));
+
+		ArgumentCaptor<Resume> saved = ArgumentCaptor.forClass(Resume.class);
+		verify(resumeRepository).save(saved.capture());
+		assertThat(saved.getValue().getUserId()).isEqualTo(USER_ID);
+	}
+
+	@Test
+	void getByIdThrowsNotFoundForAResumeOfAnotherUser() {
+		// The resume exists, but the query "id AND user id" finds nothing for a different user
+		when(resumeRepository.findByIdAndUserId(7L, OTHER_USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> resumeService.getById(OTHER_USER_ID, 7L))
+			.isInstanceOf(ResumeNotFoundException.class);
+	}
+
+	@Test
+	void getByIdThrowsWhenResumeDoesNotExist() {
+		when(resumeRepository.findByIdAndUserId(99L, USER_ID)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> resumeService.getById(USER_ID, 99L)).isInstanceOf(ResumeNotFoundException.class)
 			.hasMessageContaining("99");
 	}
 

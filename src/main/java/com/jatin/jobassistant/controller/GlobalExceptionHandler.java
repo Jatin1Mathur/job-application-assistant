@@ -22,8 +22,10 @@ import com.jatin.jobassistant.dto.ErrorResponse;
 import com.jatin.jobassistant.service.AiTimeoutException;
 import com.jatin.jobassistant.service.AiUnavailableException;
 import com.jatin.jobassistant.service.ApplicationNotFoundException;
+import com.jatin.jobassistant.service.EmailAlreadyUsedException;
 import com.jatin.jobassistant.service.InvalidAiResponseException;
 import com.jatin.jobassistant.service.InvalidAnalysisRequestException;
+import com.jatin.jobassistant.service.InvalidCredentialsException;
 import com.jatin.jobassistant.service.InvalidFileException;
 import com.jatin.jobassistant.service.ResumeNotFoundException;
 
@@ -41,6 +43,17 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler({ ResumeNotFoundException.class, ApplicationNotFoundException.class })
 	public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex) {
 		return error(HttpStatus.NOT_FOUND, ex.getMessage());
+	}
+
+	@ExceptionHandler(EmailAlreadyUsedException.class)
+	public ResponseEntity<ErrorResponse> handleEmailAlreadyUsed(EmailAlreadyUsedException ex) {
+		return error(HttpStatus.CONFLICT, ex.getMessage());
+	}
+
+	// Wrong email or password at login
+	@ExceptionHandler(InvalidCredentialsException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
+		return error(HttpStatus.UNAUTHORIZED, ex.getMessage());
 	}
 
 	// Thrown by Spring itself when the upload is bigger than spring.servlet.multipart.max-file-size

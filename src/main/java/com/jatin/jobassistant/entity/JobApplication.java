@@ -28,6 +28,10 @@ public class JobApplication {
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
+	// The user who owns this row; other users cannot see or change it
+	@Column(name = "user_id", nullable = false, updatable = false)
+	private Long userId;
+
 	@Column(nullable = false)
 	private String companyName;
 

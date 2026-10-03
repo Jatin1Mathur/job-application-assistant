@@ -2,6 +2,8 @@ package com.jatin.jobassistant.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -21,6 +23,7 @@ import com.jatin.jobassistant.dto.MatchAnalysisResult;
 import com.jatin.jobassistant.dto.PageResponse;
 import com.jatin.jobassistant.dto.UpdateStatusRequest;
 import com.jatin.jobassistant.entity.ApplicationStatus;
+import com.jatin.jobassistant.security.CurrentUser;
 import com.jatin.jobassistant.service.JobApplicationService;
 
 import jakarta.validation.Valid;
@@ -37,46 +40,51 @@ public class JobApplicationController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public ApplicationResponse create(@Valid @RequestBody CreateApplicationRequest request) {
-		return jobApplicationService.create(request);
+	public ApplicationResponse create(@AuthenticationPrincipal Jwt jwt,
+			@Valid @RequestBody CreateApplicationRequest request) {
+		return jobApplicationService.create(CurrentUser.id(jwt), request);
 	}
 
 	@GetMapping
-	public PageResponse<ApplicationResponse> list(@RequestParam(required = false) ApplicationStatus status,
+	public PageResponse<ApplicationResponse> list(@AuthenticationPrincipal Jwt jwt,
+			@RequestParam(required = false) ApplicationStatus status,
 			@RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be 0 or greater") int page,
 			@RequestParam(defaultValue = "20") @Min(value = 1, message = "size must be between 1 and 100")
 			@Max(value = 100, message = "size must be between 1 and 100") int size) {
-		return jobApplicationService.list(status, page, size);
+		return jobApplicationService.list(CurrentUser.id(jwt), status, page, size);
 	}
 
 	@GetMapping("/{id}")
-	public ApplicationResponse getById(@PathVariable Long id) {
-		return jobApplicationService.getById(id);
+	public ApplicationResponse getById(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+		return jobApplicationService.getById(CurrentUser.id(jwt), id);
 	}
 
 	@PatchMapping("/{id}/status")
-	public ApplicationResponse updateStatus(@PathVariable Long id, @Valid @RequestBody UpdateStatusRequest request) {
-		return jobApplicationService.updateStatus(id, request.status());
+	public ApplicationResponse updateStatus(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+			@Valid @RequestBody UpdateStatusRequest request) {
+		return jobApplicationService.updateStatus(CurrentUser.id(jwt), id, request.status());
 	}
 
 	// Asks the AI how well the resume fits this job and stores the score on the application.
 	// The X-Cache header says whether the answer came from Redis (HIT) or from a fresh AI call (MISS)
 	@PostMapping("/{id}/analyze")
-	public ResponseEntity<MatchAnalysisResponse> analyze(@PathVariable Long id, @RequestParam Long resumeId) {
-		MatchAnalysisResult result = jobApplicationService.analyze(id, resumeId);
+	public ResponseEntity<MatchAnalysisResponse> analyze(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+			@RequestParam Long resumeId) {
+		MatchAnalysisResult result = jobApplicationService.analyze(CurrentUser.id(jwt), id, resumeId);
 		return ResponseEntity.ok().header("X-Cache", result.fromCache() ? "HIT" : "MISS").body(result.analysis());
 	}
 
 	// Asks the AI to write a cover letter from the resume and stores it on the application
 	@PostMapping("/{id}/cover-letter")
-	public CoverLetterResponse generateCoverLetter(@PathVariable Long id, @RequestParam Long resumeId) {
-		return jobApplicationService.generateCoverLetter(id, resumeId);
+	public CoverLetterResponse generateCoverLetter(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
+			@RequestParam Long resumeId) {
+		return jobApplicationService.generateCoverLetter(CurrentUser.id(jwt), id, resumeId);
 	}
 
 	@DeleteMapping("/{id}")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void delete(@PathVariable Long id) {
-		jobApplicationService.delete(id);
+	public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id) {
+		jobApplicationService.delete(CurrentUser.id(jwt), id);
 	}
 
 }

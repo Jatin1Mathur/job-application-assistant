@@ -15,25 +15,22 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "resume")
+@Table(name = "users")
 @Getter
 @Setter
 @NoArgsConstructor
-public class Resume {
+public class User {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
 
-	// The user who owns this row; other users cannot see or change it
-	@Column(name = "user_id", nullable = false, updatable = false)
-	private Long userId;
+	@Column(nullable = false, unique = true)
+	private String email;
 
-	@Column(nullable = false)
-	private String fileName;
-
-	@Column(columnDefinition = "text")
-	private String extractedText;
+	// BCrypt hash of the password. The plain password is never stored
+	@Column(nullable = false, length = 100)
+	private String passwordHash;
 
 	@CreationTimestamp
 	@Column(nullable = false, updatable = false)

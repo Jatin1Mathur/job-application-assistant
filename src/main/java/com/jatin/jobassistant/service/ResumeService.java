@@ -27,7 +27,7 @@ public class ResumeService {
 
 	private final ResumeRepository resumeRepository;
 
-	public ResumeUploadResponse upload(MultipartFile file) {
+	public ResumeUploadResponse upload(Long userId, MultipartFile file) {
 		if (file == null || file.isEmpty()) {
 			throw new InvalidFileException("Please upload a PDF in the form-data field \"file\"");
 		}
@@ -41,13 +41,15 @@ public class ResumeService {
 		}
 
 		Resume resume = new Resume();
+		resume.setUserId(userId);
 		resume.setFileName(file.getOriginalFilename());
 		resume.setExtractedText(extractText(bytes));
 		return ResumeUploadResponse.from(resumeRepository.save(resume));
 	}
 
-	public ResumeResponse getById(Long id) {
-		return resumeRepository.findById(id)
+	public ResumeResponse getById(Long userId, Long id) {
+		// A resume of another user is reported as "not found", the same as one that does not exist
+		return resumeRepository.findByIdAndUserId(id, userId)
 			.map(ResumeResponse::from)
 			.orElseThrow(() -> new ResumeNotFoundException(id));
 	}
