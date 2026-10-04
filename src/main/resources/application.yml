@@ -38,6 +38,22 @@ jwt:
   # How long a login stays valid
   expiration: 24h
 
+# The login cookie. "secure: true" makes the browser send it over HTTPS only: switch it on wherever the app is
+# served over HTTPS. The local setup uses plain http://localhost, so it is off by default.
+auth:
+  cookie:
+    secure: ${AUTH_COOKIE_SECURE:false}
+
+# How often something may be tried before the answer is "429 Too Many Requests"
+rate-limit:
+  # Login attempts (correct or not) in login-period: per address they come from, and per email they try
+  login-per-ip: 60
+  login-per-email: 10
+  login-period: 5m
+  # Analyses and cover letters per user in ai-period
+  ai-per-user: 30
+  ai-period: 1h
+
 # Local AI model served by Ollama (https://ollama.com)
 ai:
   ollama:
@@ -55,6 +71,9 @@ demo:
 
 server:
   port: 8080
+  # Behind nginx every request seems to come from nginx. With this, the address of the real visitor is taken from
+  # the X-Forwarded-For header that nginx sets (only trusted when it comes from a private network address)
+  forward-headers-strategy: native
   tomcat:
     # Let Tomcat read an oversized upload to the end so the client gets our JSON error, not a dropped connection
     max-swallow-size: -1

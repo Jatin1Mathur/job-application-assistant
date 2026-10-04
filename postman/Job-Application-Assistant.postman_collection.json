@@ -129,17 +129,17 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
+              "raw": "{{baseUrl}}/api/auth/token",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
                 "auth",
-                "login"
+                "token"
               ]
             },
-            "description": "Logs in with email and password. Returns token, tokenType and expiresInSeconds. The script saves the token in the collection variable \"token\", which every other request sends as a Bearer token. The token is valid for 24 hours. No login needed.",
+            "description": "Logs in with email and password at /api/auth/token, the login for API clients. Returns token, tokenType and expiresInSeconds. (The browser app uses /api/auth/login, which sets an httpOnly cookie instead.) The script saves the token in the collection variable \"token\", which every other request sends as a Bearer token. The token is valid for 24 hours. No login needed.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"jatin@example.com\",\n  \"password\": \"change-this-password\"\n}",

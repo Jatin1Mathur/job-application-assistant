@@ -62,6 +62,8 @@ services:
       # Ollama runs on the host machine, not in a container
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      # true: the login cookie is sent over HTTPS only. Leave it off for http://localhost
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
     # Docker Desktop (Mac, Windows) knows host.docker.internal by itself; this line makes it work on Linux too
     extra_hosts:
       - "host.docker.internal:host-gateway"

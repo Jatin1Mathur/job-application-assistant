@@ -18,13 +18,15 @@ export const MODEL_NAME = process.env.E2E_MODEL ?? 'llama3.2'
 // Works for the built app (hashed file names) and for the Vite dev server.
 export const is3dRequest = (url: string) => /react-three|deps\/three|BackpackHero|CompassScene|ScoreOrb|SkillUniverse/i.test(url)
 
-// Calls the backend as the logged-in user of this page
+// Calls the backend as the logged-in user of this page. The browser sends the login cookie by itself; a request
+// that changes something also needs the CSRF token from the XSRF-TOKEN cookie in a header, like the app sends it.
 export const apiCall = (page: Page, method: string, path: string, body?: unknown) =>
   page.evaluate(
     async ([method, path, body]) => {
+      const csrf = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)?.[1]
       const response = await fetch('/api' + path, {
         method: method as string,
-        headers: { Authorization: 'Bearer ' + localStorage.getItem('job-assistant.token'), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+        headers: { ...(csrf ? { 'X-XSRF-TOKEN': decodeURIComponent(csrf) } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? JSON.stringify(body) : undefined,
       })
       return response.status === 204 ? null : response.json()

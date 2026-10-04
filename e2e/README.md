@@ -1,12 +1,13 @@
 # Browser tests
 
-These tests drive the running app in a real browser, the way a user would: 21 tests with 145 checks, written with [Playwright](https://playwright.dev).
+These tests drive the running app in a real browser, the way a user would: 24 tests with 158 checks, written with [Playwright](https://playwright.dev).
 
 | File | What it covers |
 |---|---|
 | `tests/01-public-pages.spec.ts` | Landing page: 3D hero, scroll story, sample demo, letter slider, architecture diagram. Touch devices and reduced motion. |
 | `tests/02-user-journey.spec.ts` | One new user from sign-up to delete: resume upload, application, AI analysis, cover letter (tone, regenerate, PDF export), timeline, notes, board with drag and drop, insights, command palette, shortcuts, dark mode, phone width, keyboard focus, and the fallbacks without WebGL. |
 | `tests/03-demo-account.spec.ts` | The login page with its compass, and the demo account with its sample data. |
+| `tests/04-security.spec.ts` | The login protection: the httpOnly cookie, the CSRF check, the rate limit on login attempts (429), and the way in for API clients. |
 
 Each `check(...)` in the tests is one named check. A failed check is reported and the test continues, so one run shows everything that is wrong.
 

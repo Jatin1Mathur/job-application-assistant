@@ -27,7 +27,10 @@ I decided on stateless authentication with a JSON Web Token.
 ## Consequences
 
 - The backend is stateless: any request can be checked without a database lookup for a session.
-- No cookies are used, so CSRF protection is switched off deliberately.
 - Every service method takes the user id from the token and loads rows with it. A row of another user is answered with 404, not 403, so ids cannot be probed.
 - The login error is the same for an unknown email and a wrong password.
-- Limits I accept for now: a token cannot be revoked before it expires, there are no refresh tokens (after 24 hours the user logs in again), and the frontend keeps the token in `localStorage`, which a script injected into the page could read.
+- Limits I accept for now: a token cannot be revoked before it expires, and there are no refresh tokens (after 24 hours the user logs in again).
+
+## Update
+
+When this was decided, the frontend kept the token in `localStorage` and sent it in a header, so no cookies were used and CSRF protection was off. That part was replaced by [ADR 007](007-login-token-in-an-httponly-cookie.md): the browser now gets the token in an httpOnly cookie, with CSRF protection. The token itself, its signature and its lifetime are unchanged.

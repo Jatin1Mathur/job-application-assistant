@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { api, setSessionExpiredHandler, tokenStore } from './api.ts'
+import { api, sessionHint, setSessionExpiredHandler } from './api.ts'
 
 interface AuthContextValue {
-  token: string | null
+  // True while this browser is (as far as the page knows) logged in
+  loggedIn: boolean
   email: string | null
-  // Set when the user was logged out because the token expired
+  // Set when the user was logged out because the login expired
   notice: string | null
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name?: string) => Promise<void>
@@ -16,23 +17,22 @@ interface AuthContextValue {
   logout: () => void
 }
 
-const EMAIL_KEY = 'job-assistant.email'
 // The same address the backend gives the demo user (DemoAccountService.DEMO_EMAIL)
 const DEMO_EMAIL = 'demo@jobassistant.example'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-// Keeps the login state (JWT token + email) for the whole app and saves it in the browser,
-// so the user stays logged in after a page reload
+// Keeps the login state for the whole app.
+//
+// The login token is in an httpOnly cookie, which this code cannot read. So the page keeps a note of its own
+// (the email, in localStorage) that says "probably logged in". When the page loads with that note, it asks the
+// backend once whether the cookie is still good. If not, the user is logged out with a short explanation.
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(tokenStore.get())
-  const [email, setEmail] = useState<string | null>(localStorage.getItem(EMAIL_KEY))
+  const [email, setEmail] = useState<string | null>(sessionHint.get())
   const [notice, setNotice] = useState<string | null>(null)
 
   const clear = useCallback(() => {
-    tokenStore.clear()
-    localStorage.removeItem(EMAIL_KEY)
-    setToken(null)
+    sessionHint.clear()
     setEmail(null)
   }, [])
 
@@ -43,24 +43,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }, [clear])
 
-  const login = useCallback(async (emailInput: string, password: string) => {
-    const result = await api.login(emailInput, password)
-    const normalized = emailInput.trim().toLowerCase()
-    tokenStore.set(result.token)
-    localStorage.setItem(EMAIL_KEY, normalized)
-    setToken(result.token)
-    setEmail(normalized)
+  // Check the cookie once when the page loads. A 401 runs the handler above.
+  useEffect(() => {
+    if (sessionHint.get()) {
+      api.getAccount().catch(() => {})
+    }
+  }, [])
+
+  const started = useCallback((sessionEmail: string) => {
+    sessionHint.set(sessionEmail)
+    setEmail(sessionEmail)
     setNotice(null)
   }, [])
 
+  const login = useCallback(
+    async (emailInput: string, password: string) => {
+      const session = await api.login(emailInput, password)
+      started(session.email)
+    },
+    [started],
+  )
+
   const demoLogin = useCallback(async () => {
-    const result = await api.demoLogin()
-    tokenStore.set(result.token)
-    localStorage.setItem(EMAIL_KEY, DEMO_EMAIL)
-    setToken(result.token)
-    setEmail(DEMO_EMAIL)
-    setNotice(null)
-  }, [])
+    const session = await api.demoLogin()
+    started(session.email)
+  }, [started])
 
   const register = useCallback(
     async (emailInput: string, password: string, name?: string) => {
@@ -71,13 +78,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const logout = useCallback(() => {
+    // The backend deletes the cookie. The page logs out at once and does not wait for the answer.
+    api.logout().catch(() => {})
     clear()
     setNotice(null)
   }, [clear])
 
   const value = useMemo(
-    () => ({ token, email, notice, login, register, demoLogin, isDemo: email === DEMO_EMAIL, logout }),
-    [token, email, notice, login, register, demoLogin, logout],
+    () => ({ loggedIn: email !== null, email, notice, login, register, demoLogin, isDemo: email === DEMO_EMAIL, logout }),
+    [email, notice, login, register, demoLogin, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

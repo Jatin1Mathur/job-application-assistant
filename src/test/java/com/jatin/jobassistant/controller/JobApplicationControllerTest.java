@@ -1,5 +1,12 @@
 package com.jatin.jobassistant.controller;
 
+import org.springframework.test.annotation.DirtiesContext;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import com.jatin.jobassistant.security.RateLimitExceededException;
+import com.jatin.jobassistant.security.RateLimits;
+import com.jatin.jobassistant.security.AuthCookies;
+import jakarta.servlet.http.Cookie;
 import com.jatin.jobassistant.service.InvalidAnalysisRequestException;
 import com.jatin.jobassistant.dto.StatusChangeResponse;
 import com.jatin.jobassistant.dto.UpdateDetailsRequest;
@@ -70,6 +77,9 @@ class JobApplicationControllerTest {
 	private JwtService jwtService;
 
 	// A real token for USER_ID, sent as the Authorization header on every request
+	@MockitoBean
+	private RateLimits rateLimits;
+
 	private String token;
 
 	@BeforeEach
@@ -83,7 +93,7 @@ class JobApplicationControllerTest {
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.status").value(401))
 			.andExpect(jsonPath("$.message")
-				.value("Please log in and send your token in the Authorization header: Bearer <token>"));
+				.value("Please log in first. API clients send their token in the Authorization header: Bearer <token>"));
 
 		verifyNoInteractions(jobApplicationService);
 	}
@@ -548,6 +558,91 @@ class JobApplicationControllerTest {
 	void updateDetailsNeedsALogin() throws Exception {
 		mockMvc.perform(patch("/api/applications/1/details").contentType(MediaType.APPLICATION_JSON).content("{}"))
 			.andExpect(status().isUnauthorized());
+	}
+
+	// ---------- login cookie and CSRF
+
+	private Cookie loginCookie() {
+		return new Cookie(AuthCookies.NAME, jwtService.generateToken(USER_ID, "user@example.com"));
+	}
+
+	@Test
+	void theLoginCookieIsAcceptedInsteadOfTheAuthorizationHeader() throws Exception {
+		when(jobApplicationService.getById(USER_ID, 1L)).thenReturn(response(1L, ApplicationStatus.SAVED));
+
+		mockMvc.perform(get("/api/applications/1").cookie(loginCookie()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.id").value(1));
+	}
+
+	@Test
+	void aChangingRequestWithTheCookieNeedsTheCsrfToken() throws Exception {
+		mockMvc.perform(delete("/api/applications/1").cookie(loginCookie()))
+			.andExpect(status().isForbidden())
+			.andExpect(jsonPath("$.message").value(containsString("CSRF token is missing or wrong")));
+
+		verifyNoInteractions(jobApplicationService);
+	}
+
+	@Test
+	void aChangingRequestWithTheCookieAndTheCsrfTokenWorks() throws Exception {
+		mockMvc.perform(delete("/api/applications/1").cookie(loginCookie()).with(csrf())).andExpect(status().isNoContent());
+
+		verify(jobApplicationService).delete(USER_ID, 1L);
+	}
+
+	@Test
+	void aRequestWithTheAuthorizationHeaderNeedsNoCsrfToken() throws Exception {
+		mockMvc.perform(delete("/api/applications/1").header("Authorization", token)).andExpect(status().isNoContent());
+	}
+
+	@Test
+	void aBrokenCookieIsAnswered401NotAccepted() throws Exception {
+		mockMvc.perform(get("/api/applications/1").cookie(new Cookie(AuthCookies.NAME, "not-a-token")))
+			.andExpect(status().isUnauthorized());
+	}
+
+	// A fresh application context for this one test: the csrf() helper used by other tests swaps the place where
+	// tokens are kept for a test double, and that would hide the real cookie
+	@Test
+	@DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
+	void theCsrfCookieIsHandedOutOnAnOrdinaryRequest() throws Exception {
+		when(jobApplicationService.getById(USER_ID, 1L)).thenReturn(response(1L, ApplicationStatus.SAVED));
+
+		mockMvc.perform(get("/api/applications/1").cookie(loginCookie())).andExpect(cookie().exists("XSRF-TOKEN"));
+	}
+
+	// ---------- rate limit for AI requests
+
+	@Test
+	void analyzeAnswers429WhenTheUserHasUsedUpTheAiRequests() throws Exception {
+		doThrow(new RateLimitExceededException("AI requests", 120)).when(rateLimits).aiRequest(USER_ID);
+
+		mockMvc.perform(post("/api/applications/1/analyze").header("Authorization", token).param("resumeId", "2"))
+			.andExpect(status().isTooManyRequests())
+			.andExpect(header().string("Retry-After", "120"))
+			.andExpect(jsonPath("$.status").value(429))
+			.andExpect(jsonPath("$.message").value("Too many AI requests. Please wait 2 minutes and try again"));
+
+		verifyNoInteractions(jobApplicationService);
+	}
+
+	@Test
+	void coverLetterCountsAsAnAiRequestToo() throws Exception {
+		doThrow(new RateLimitExceededException("AI requests", 30)).when(rateLimits).aiRequest(USER_ID);
+
+		mockMvc.perform(post("/api/applications/1/cover-letter").header("Authorization", token).param("resumeId", "2"))
+			.andExpect(status().isTooManyRequests())
+			.andExpect(jsonPath("$.message").value("Too many AI requests. Please wait 30 seconds and try again"));
+	}
+
+	@Test
+	void readingAnApplicationIsNotRateLimited() throws Exception {
+		when(jobApplicationService.getById(USER_ID, 1L)).thenReturn(response(1L, ApplicationStatus.SAVED));
+
+		mockMvc.perform(get("/api/applications/1").header("Authorization", token)).andExpect(status().isOk());
+
+		verifyNoInteractions(rateLimits);
 	}
 
 }

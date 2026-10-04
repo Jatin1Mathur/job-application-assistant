@@ -83,13 +83,14 @@ flowchart TB
     Request["HTTP request"] --> Security
 
     subgraph Web["Web layer"]
-        Security["Spring Security filter chain<br/>checks the Bearer token (JWT)"]
+        Security["Spring Security filter chain<br/>CSRF check, then the login token (JWT)<br/>from the cookie or the Authorization header"]
         Controllers["Controllers<br/>Auth, Account, Dashboard, Insights,<br/>JobApplication, Resume, Health"]
         Errors["GlobalExceptionHandler<br/>turns exceptions into JSON errors"]
     end
 
     subgraph Services["Service layer"]
         AuthService["AuthService<br/>JwtService"]
+        Limits["RateLimits<br/>(Bucket4j)"]
         AppService["JobApplicationService<br/>ResumeService"]
         ReadServices["DashboardService<br/>InsightsService"]
         Demo["DemoAccountService<br/>seed and nightly reset"]
@@ -105,6 +106,7 @@ flowchart TB
 
     Security --> Controllers
     Controllers --> AuthService
+    Controllers --> Limits
     Controllers --> AppService
     Controllers --> ReadServices
     Controllers -.-> Errors
@@ -141,6 +143,10 @@ sequenceDiagram
 
     User->>FE: email and password
     FE->>AUTH: POST /api/auth/login
+    AUTH->>AUTH: rate limit: attempts for this address and this email
+    alt too many attempts
+        AUTH-->>FE: 429 with Retry-After
+    end
     AUTH->>DB: find user by email (lower case)
     DB-->>AUTH: user row with BCrypt hash
     AUTH->>AUTH: BCrypt: does the password match the hash?
@@ -148,14 +154,18 @@ sequenceDiagram
         AUTH-->>FE: 401 "Email or password is incorrect"
     else correct
         AUTH->>AUTH: JwtService signs a token (HS256):<br/>subject = user id, expires in 24 hours
-        AUTH-->>FE: 200 token, tokenType, expiresInSeconds
-        FE->>FE: keep the token in localStorage
+        AUTH-->>FE: 200 who is logged in (no token in the body)<br/>Set-Cookie: job_assistant_token, HttpOnly, SameSite=Strict, Path=/api
+        Note over FE: The page cannot read this cookie.<br/>It only remembers the email as a hint.
     end
 
     Note over FE,DB: Every later request
 
-    FE->>SEC: GET /api/applications<br/>Authorization: Bearer token
-    SEC->>SEC: check signature and expiry
+    FE->>SEC: PATCH /api/applications/8/status<br/>Cookie: job_assistant_token (sent by the browser)<br/>X-XSRF-TOKEN: value of the XSRF-TOKEN cookie
+    SEC->>SEC: changing request with the login cookie:<br/>is the CSRF header present and right?
+    alt CSRF token missing or wrong
+        SEC-->>FE: 403 JSON error
+    end
+    SEC->>SEC: take the token from the cookie,<br/>check signature and expiry
     alt token missing, invalid or expired
         SEC-->>FE: 401 JSON error
         FE->>FE: log out, show "Your session has expired"
@@ -167,8 +177,12 @@ sequenceDiagram
 Notes:
 
 - There is no server-side session. The token is the only proof of login, so the backend is stateless.
+- **The browser** gets the token in an httpOnly cookie. JavaScript cannot read it, so a script injected into the page cannot steal it. `SameSite=Strict` stops the browser from sending it with requests that come from another website. Reasons and trade-offs: [ADR 007](adr/007-login-token-in-an-httponly-cookie.md).
+- **CSRF protection** applies to requests that change something and are authenticated by the cookie. The backend hands out a token in a second cookie that the page may read (`XSRF-TOKEN`); the page sends it back in the header `X-XSRF-TOKEN`. Requests with an `Authorization` header are not checked, because a browser never adds that header by itself.
+- **API clients** such as Postman use `POST /api/auth/token`, which returns the token in the body, and send it as `Authorization: Bearer <token>`. No cookie is involved.
+- **Logging out** is `POST /api/auth/logout`: only the backend can delete an httpOnly cookie.
 - The same message is returned for an unknown email and a wrong password, so the login form cannot be used to find out which emails have an account.
-- "Try with demo account" uses `POST /api/auth/demo`, which returns a token for the demo user without any password. A password login for the demo user is always refused.
+- "Try with demo account" uses `POST /api/auth/demo`, which logs the browser in as the demo user without any password. A password login for the demo user is always refused.
 
 ## 5. Analyze match and the Redis cache
 
@@ -303,14 +317,16 @@ Design points:
 
 ## 7. API reference
 
-All paths start with `/api`. "Token" means the header `Authorization: Bearer <token>` is required; without it the answer is 401. Errors have the shape `{"status", "error", "message"}`.
+All paths start with `/api`. "Token" means a valid login is required: the login cookie (browser) or the header `Authorization: Bearer <token>` (API clients). Without it the answer is 401. With the cookie, requests that change something also need the `X-XSRF-TOKEN` header. Errors have the shape `{"status", "error", "message"}`.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | public | Answers `OK`. Used by the Docker health check. |
 | POST | `/auth/register` | public | Creates an account (`email`, `password`, optional `name`). 201, or 409 if the email is taken. |
-| POST | `/auth/login` | public | Returns a token. 401 with a generic message on failure. |
-| POST | `/auth/demo` | public | Returns a token for the shared demo account. 503 if the demo account is switched off. |
+| POST | `/auth/login` | public | Login for the browser: sets the httpOnly login cookie and returns who is logged in. 401 with a generic message on failure, 429 after too many attempts. |
+| POST | `/auth/token` | public | Login for API clients: returns the token in the body, sets no cookie. Same limits. |
+| POST | `/auth/demo` | public | Logs the browser in as the shared demo account (cookie). 503 if the demo account is switched off. |
+| POST | `/auth/logout` | public | Deletes the login cookie. 204. |
 | GET | `/account` | token | Email, name and whether this is the demo account. |
 | PATCH | `/account` | token | Sets or removes the name. 403 for the demo account. |
 | GET | `/dashboard?zone=` | token | Counts, interview rate, average score, applications per day and per week for 12 weeks, next actions. |
@@ -324,12 +340,12 @@ All paths start with `/api`. "Token" means the header `Authorization: Bearer <to
 | GET | `/applications/{id}` | token | One application with its analysis and status history. |
 | PATCH | `/applications/{id}/status` | token | Changes the status and records the change. |
 | PATCH | `/applications/{id}/details` | token | Notes and interview date. |
-| POST | `/applications/{id}/analyze?resumeId=` | token | Runs the AI match analysis. Header `X-Cache: HIT` or `MISS`. |
+| POST | `/applications/{id}/analyze?resumeId=` | token | Runs the AI match analysis. Header `X-Cache: HIT` or `MISS`. 429 after too many AI requests. |
 | POST | `/applications/{id}/cover-letter?resumeId=&tone=` | token | Writes a cover letter. `tone` is `formal` (default), `friendly` or `short`. |
 | GET | `/applications/{id}/cover-letter.pdf` | token | The stored cover letter as a PDF download. |
 | DELETE | `/applications/{id}` | token | Deletes the application. 204. |
 
-Common error answers: 400 for invalid input, 401 without a valid token, 404 for something that does not exist or belongs to another user, 413 for an upload over 5 MB, 502/503/504 for problems with the AI model.
+Common error answers: 400 for invalid input, 401 without a valid login, 403 for a missing CSRF token, 404 for something that does not exist or belongs to another user, 413 for an upload over 5 MB, 429 with a `Retry-After` header when a rate limit is reached, 502/503/504 for problems with the AI model.
 
 A Postman collection with these requests is in [`postman/`](../postman).
 
@@ -339,8 +355,11 @@ A Postman collection with these requests is in [`postman/`](../postman).
 |---|---|
 | **Passwords** | Stored only as BCrypt hashes. BCrypt reads at most 72 bytes, so passwords are limited to 8 to 72 characters. Request objects hide the password in `toString()`, so it cannot end up in a log. |
 | **Login tokens** | JWT signed with HS256, valid for 24 hours, user id in the subject. Checked by Spring Security's OAuth2 resource server on every request. |
+| **Where the token lives** | In the browser: an httpOnly cookie (`SameSite=Strict`, path `/api`), which JavaScript cannot read. The `Secure` flag is switched on with `AUTH_COOKIE_SECURE=true` wherever the app is served over HTTPS. API clients send the token in the `Authorization` header instead. |
+| **CSRF** | Requests that change something and carry the login cookie must send the CSRF token from the `XSRF-TOKEN` cookie in the header `X-XSRF-TOKEN`; otherwise 403. Requests with an `Authorization` header are exempt, because browsers do not add that header on their own. |
+| **Rate limiting** | Bucket4j token buckets in the backend's memory. Login attempts: 60 per 5 minutes per address and 10 per 5 minutes per email. AI requests (analysis and cover letter): 30 per hour per user. Over the limit: 429 with `Retry-After` and a message that says how long to wait. The numbers are settings (`rate-limit.*`). Behind nginx the visitor's address is taken from `X-Forwarded-For`. |
 | **The signing secret** | Read from the environment (`JWT_SECRET`). The application refuses to start if it is shorter than 32 characters. |
-| **No sessions** | The API is stateless and uses no cookies, so CSRF protection is switched off on purpose. |
+| **No sessions** | The API is stateless: there is no server-side session, only the signed token. |
 | **Data isolation** | Every query for user data includes the user id from the token. A row of another user is answered with 404, the same as a row that does not exist, so ids cannot be probed. |
 | **Login error** | One message for an unknown email and a wrong password. |
 | **Uploads** | Only PDFs: the file name and the first bytes (`%PDF-`) are both checked, and the size limit is 5 MB. |
@@ -358,14 +377,14 @@ Three levels, from fast and narrow to slow and complete.
 
 | Level | Tools | Count | What it proves |
 |---|---|---|---|
-| **Unit tests** | JUnit 5, Mockito | 139 tests in 11 classes | The rules of each service in isolation: scores, the funnel, next actions, the cache key, PDF writing, skill detection. Repositories and the AI are mocks. `OllamaAiService` is tested against a fake HTTP server (`MockRestServiceServer`). |
-| **Web layer tests** | `@WebMvcTest`, MockMvc, the real `SecurityConfig` | 68 tests in 6 classes | Status codes, JSON shapes, validation messages, and that every endpoint except the public ones needs a token. Services are mocks. |
-| **Integration tests** | `@SpringBootTest` against a real PostgreSQL and Redis | 7 tests in 2 classes | That the application starts, the Flyway migrations run, the demo account is seeded, and the database trigger really refuses to delete or change the demo user. |
-| **End-to-end tests** | Playwright ([`e2e/`](../e2e)) | 21 tests with 145 checks | The whole product in a real browser against the Docker setup: sign-up, upload, analysis, cover letter, board, insights, keyboard, phone width, reduced motion, demo account. |
+| **Unit tests** | JUnit 5, Mockito | 150 tests in 13 classes | The rules of each service in isolation: scores, the funnel, next actions, the cache key, PDF writing, skill detection, rate limits. Repositories and the AI are mocks. `OllamaAiService` is tested against a fake HTTP server (`MockRestServiceServer`). |
+| **Web layer tests** | `@WebMvcTest`, MockMvc, the real `SecurityConfig` | 83 tests in 6 classes | Status codes, JSON shapes, validation messages, that every endpoint except the public ones needs a login, the login cookie and its flags, the CSRF check, and the 429 answers. Services are mocks. |
+| **Integration tests** | `@SpringBootTest` with Testcontainers (PostgreSQL and Redis) | 7 tests in 2 classes | That the application starts, the Flyway migrations run, the demo account is seeded, and the database trigger really refuses to delete or change the demo user. |
+| **End-to-end tests** | Playwright ([`e2e/`](../e2e)) | 24 tests with 158 checks | The whole product in a real browser against the Docker setup: sign-up, upload, analysis, cover letter, board, insights, keyboard, phone width, reduced motion, demo account, and the login protection (cookie, CSRF, rate limit, API clients). |
 
-All 214 backend tests run with `./mvnw test`.
+All 240 backend tests run with `./mvnw test`. Only Docker has to be running.
 
-**About the integration tests:** they do not use Testcontainers. They connect to the PostgreSQL and Redis that are already running: the Docker Compose containers on a developer's machine, and service containers in CI. This keeps the setup simple, but it means the tests need those two containers to be up, and locally they run against the development database (they reset the demo account's data). Moving them to Testcontainers would remove both drawbacks.
+**About the integration tests:** Testcontainers starts a PostgreSQL (the same image as in `docker-compose.yml`) and a Redis in throwaway containers before the tests and removes them afterwards. The tests never touch the development database, and they need nothing running beforehand except Docker. The same happens in CI.
 
 **What is replaced in CI, and why:** the CI machine has no AI model. For the end-to-end tests, `e2e/mock-ollama.mjs` stands in for Ollama and answers with fixed text. Only the model is replaced: the backend still builds the prompt, validates the answer, stores it and caches it, and PostgreSQL, Redis, nginx and the frontend are the real containers. These tests therefore do not measure the quality of the real model's answers. The same suite can be run locally against the real model (see [`e2e/README.md`](../e2e/README.md)).
 
@@ -378,7 +397,7 @@ flowchart LR
     Trigger(["push or pull request"])
 
     subgraph Always["On every push and pull request"]
-        Backend["Backend tests<br/>./mvnw test<br/>with PostgreSQL and Redis<br/>as service containers"]
+        Backend["Backend tests<br/>./mvnw test<br/>Testcontainers start<br/>PostgreSQL and Redis"]
         Frontend["Frontend<br/>npm ci, lint, build"]
         Images["Docker images<br/>build backend and frontend"]
     end
@@ -452,7 +471,7 @@ flowchart TB
     end
 
     Api["api.ts<br/>every call to the backend"]
-    AuthCtx["auth.tsx<br/>token and email in localStorage"]
+    AuthCtx["auth.tsx<br/>login state; the token itself<br/>is in an httpOnly cookie"]
     Components["components/<br/>Layout, KanbanBoard, dashboard/, detail/,<br/>home/, resumes/, ui/ (shadcn)"]
     Lazy["Lazy3D<br/>decides if and when a 3D scene loads"]
     Three["three/ (separate downloads)<br/>BackpackHero, CompassScene,<br/>ScoreOrb, SkillUniverse"]
@@ -468,12 +487,13 @@ flowchart TB
     Detail --> Lazy
     Insights --> Lazy
     Lazy -.->|"dynamic import"| Three
-    Api -->|"/api + Bearer token"| Backend["Backend"]
+    Api -->|"/api + login cookie<br/>+ CSRF header"| Backend["Backend"]
 ```
 
 - **Routing:** `/` is the public landing page; `/login` and `/register` share one `AuthPage`; everything else needs a token and is wrapped in `Layout` (navigation, command palette, shortcuts).
-- **`api.ts`** is the only place that calls `fetch`. It adds the token, turns backend errors into one `ApiError` type with the backend's own message, and reports a 401 so the app can log the user out.
-- **`auth.tsx`** keeps the token and the email in a React context and in `localStorage`, so a reload keeps the user logged in.
+- **`api.ts`** is the only place that calls `fetch`. The browser attaches the login cookie by itself; `api.ts` adds the CSRF header to requests that change something, turns backend errors into one `ApiError` type with the backend's own message, and reports a 401 so the app can log the user out.
+- **`auth.tsx`** keeps the login state in a React context. It cannot read the token. It remembers only the email in `localStorage`, as a hint that this browser is probably logged in, and asks the backend once per page load whether the cookie is still valid.
+- **Code splitting:** every page is a separate download (`React.lazy` in `App.tsx`), and so are the board with its drag-and-drop library and the confetti. A visitor of the landing page does not download the dashboard or the charts.
 - **State:** component state and context only. There is no global store; each page loads what it needs.
 - **3D:** every scene is a lazy import behind `Lazy3D`. `Lazy3D` shows a flat fallback first and loads the scene only if WebGL is available, the user has not asked for reduced motion, and the scene has come near the screen. It stops rendering when the scene is off-screen or the tab is hidden ([ADR 005](adr/005-3d-only-on-selected-pages.md)).
 - **pdf.js** is loaded only on the resumes page, when the first thumbnail is drawn.
@@ -486,6 +506,7 @@ flowchart TB
 | **AI cache** | In one measured run with `llama3.2`, the first analysis took 3.66 s and the same request again took 0.01 s from Redis. |
 | **List queries** | The analyses of a whole page of applications are loaded with one query, not one per application. |
 | **Resume files** | Stored in a separate table, so listing resumes does not load PDFs. The file endpoint lets the browser cache the PDF for 30 days. |
+| **Main bundle** | 426 kB (135 kB compressed) after splitting the pages into separate downloads; it was 1,213 kB (370 kB compressed) before. |
 | **3D code** | About 909 kB (241 kB compressed) of shared 3D code plus a few kB per scene, downloaded only on pages that show a scene. The dashboard downloads none of it. |
 | **Pixel ratio** | Capped at 1.5 (1.25 on phones), so dense screens do not render four times the pixels. |
 | **Backpack model** | 11,656 triangles on desktop, 6,888 on phones, one instanced mesh for the stitches, no real-time shadows. |
@@ -495,13 +516,12 @@ flowchart TB
 
 ## Known limitations
 
-- **Main bundle size.** The main JavaScript bundle is about 1.2 MB (370 kB compressed). The pages are not split into separate downloads; only the 3D scenes and pdf.js are.
 - **The model is small and local.** `llama3.2` can miss skills or misjudge a match. The app tells users to check the result, and skills are labelled as coming from the AI.
 - **Skill detection in resumes** is a search for about 80 well-known names. It misses skills written in other words and can mistake an ordinary word for a skill.
 - **Dashboard and insights load all of a user's applications** into memory and count in Java. Fine for hundreds of applications, not designed for many thousands.
-- **Token storage.** The token is in `localStorage`, which a script injected into the page could read. There are no refresh tokens: after 24 hours the user logs in again. A token cannot be revoked before it expires.
-- **No rate limiting** on login or on the AI endpoints.
-- **No HTTPS** in the local setup, and no production deployment. The images are built in CI but not published.
+- **Tokens cannot be revoked.** Logging out deletes the cookie in that browser, but a token that was copied before stays valid until it expires (24 hours). There are no refresh tokens.
+- **Rate limits are counted per backend instance,** in memory. They are lost on a restart, and several instances would each count on their own. A shared store (Redis) would fix that.
+- **The insights page is still a large download** (419 kB, 118 kB compressed), because it contains the chart library.
+- **No HTTPS** in the local setup, so the login cookie is sent without the `Secure` flag there (it is a setting). No production deployment. The images are built in CI but not published.
 - **The demo account is shared.** Two visitors at the same time see each other's changes until the nightly reset.
-- **Integration tests use the running database** instead of Testcontainers (see [Testing strategy](#9-testing-strategy)).
 - **Older data.** Applications created before the status history existed have only "created" and their current status; resumes uploaded before files were stored have no preview.

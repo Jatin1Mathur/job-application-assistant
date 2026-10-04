@@ -10,5 +10,6 @@ Short records of the decisions that shaped this project: what the situation was,
 | [004](004-flyway-for-database-migrations.md) | Flyway for database migrations |
 | [005](005-3d-only-on-selected-pages.md) | 3D only on selected pages |
 | [006](006-docker-compose-for-one-command-setup.md) | Docker Compose for a one-command setup |
+| [007](007-login-token-in-an-httponly-cookie.md) | The login token in an httpOnly cookie, with CSRF protection |
 
 The decisions are mine. The code that implements them was written with Claude Code as an AI pair programmer, from my step descriptions, and reviewed by me in pull requests.

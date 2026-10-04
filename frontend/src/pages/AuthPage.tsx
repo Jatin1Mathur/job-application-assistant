@@ -143,7 +143,7 @@ function SuccessMark({ text }: { text: string }) {
 const fieldError = 'mt-1.5 text-sm font-medium text-destructive'
 
 export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
-  const { token, notice, login, register, demoLogin } = useAuth()
+  const { loggedIn, notice, login, register, demoLogin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const reducedMotion = useReducedMotion()
@@ -185,7 +185,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   }, [phase, reducedMotion, navigate, cameFrom])
 
   // Someone who is already logged in has nothing to do here
-  if (token && phase === 'form') {
+  if (loggedIn && phase === 'form') {
     return <Navigate to={cameFrom} replace />
   }
 

@@ -1,5 +1,7 @@
 package com.jatin.jobassistant.service;
 
+import com.jatin.jobassistant.dto.SessionResponse;
+import java.time.Duration;
 import com.jatin.jobassistant.dto.AccountResponse;
 import java.util.Locale;
 
@@ -75,10 +77,26 @@ public class AuthService {
 		return name == null || name.isBlank() ? null : name.strip();
 	}
 
-	// "Try with demo account": logs the visitor in as the shared demo user, without a password
-	public LoginResponse demoLogin() {
-		User demo = userRepository.findByDemoTrue().orElseThrow(DemoUnavailableException::new);
-		return tokenFor(demo);
+	// What a login from the browser needs: the token for the cookie, and who is now logged in
+	public record Session(String token, Duration lifetime, SessionResponse details) {
+	}
+
+	public Session loginSession(LoginRequest request) {
+		User user = userRepository.findByEmail(normalize(request.email())).orElseThrow(InvalidCredentialsException::new);
+		if (user.isDemo() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+			throw new InvalidCredentialsException();
+		}
+		return sessionFor(user);
+	}
+
+	public Session demoSession() {
+		return sessionFor(userRepository.findByDemoTrue().orElseThrow(DemoUnavailableException::new));
+	}
+
+	private Session sessionFor(User user) {
+		Duration lifetime = jwtService.getExpiration();
+		return new Session(jwtService.generateToken(user.getId(), user.getEmail()), lifetime,
+				new SessionResponse(user.getEmail(), user.getName(), user.isDemo(), lifetime.toSeconds()));
 	}
 
 	private LoginResponse tokenFor(User user) {

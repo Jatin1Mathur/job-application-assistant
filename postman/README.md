@@ -12,4 +12,6 @@ A ready-made collection is in [`Job-Application-Assistant.postman_collection.jso
 
 You do not need to copy anything by hand. Login saves the `token`, Upload resume saves `resumeId`, and Create application saves `applicationId` as collection variables, and the other requests use them. The token is sent automatically as a Bearer token on every request except Health, Register and Login.
 
+**Login** calls `/api/auth/token`, the login for API clients, which returns the token in the body. The browser app uses `/api/auth/login` instead and gets the token in an httpOnly cookie.
+
 The token is valid for 24 hours. If you get a 401, run **Login** again. If the app runs somewhere else, change the `baseUrl` collection variable.

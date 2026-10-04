@@ -1,5 +1,7 @@
 package com.jatin.jobassistant.controller;
 
+import com.jatin.jobassistant.security.RateLimitExceededException;
+import org.springframework.http.HttpHeaders;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
@@ -62,6 +64,15 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(DemoAccountLockedException.class)
 	public ResponseEntity<ErrorResponse> handleDemoLocked(DemoAccountLockedException ex) {
 		return error(HttpStatus.FORBIDDEN, ex.getMessage());
+	}
+
+	// Too many login attempts or AI requests in a short time. Retry-After says how many seconds to wait
+	@ExceptionHandler(RateLimitExceededException.class)
+	public ResponseEntity<ErrorResponse> handleRateLimit(RateLimitExceededException ex) {
+		HttpStatus status = HttpStatus.TOO_MANY_REQUESTS;
+		return ResponseEntity.status(status)
+			.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+			.body(new ErrorResponse(status.value(), status.getReasonPhrase(), ex.getMessage()));
 	}
 
 	// Wrong email or password at login
