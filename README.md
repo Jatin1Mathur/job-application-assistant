@@ -75,7 +75,7 @@ The details are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: container a
 | Data | PostgreSQL 16 with Flyway migrations, Redis 7 |
 | AI | Ollama with `llama3.2`, called over HTTP (JSON mode for the analysis) |
 | DevOps | Docker (multi-stage images, non-root), Docker Compose with health checks, nginx, GitHub Actions |
-| Testing | JUnit 5, Mockito, Spring MockMvc, Testcontainers (PostgreSQL and Redis), Playwright browser tests, oxlint |
+| Testing | JUnit 6, Mockito, Spring MockMvc, Testcontainers (PostgreSQL and Redis), Playwright browser tests, oxlint |
 
 ## Quick start (Docker)
 
@@ -145,7 +145,7 @@ You are then inside a shared account with two sample resumes, eight sample appli
 
 | Level | What | How to run |
 |---|---|---|
-| Backend | 240 tests (JUnit 5, Mockito, MockMvc): 150 unit tests, 83 web layer tests, 7 integration tests against a real PostgreSQL and Redis started by Testcontainers | `./mvnw test` (needs Docker running, nothing else) |
+| Backend | 240 tests (JUnit 6, Mockito, MockMvc): 150 unit tests, 83 web layer tests, 7 integration tests against a real PostgreSQL and Redis started by Testcontainers | `./mvnw test` (needs Docker running, nothing else) |
 | Browser | 24 Playwright tests with 158 checks that use the running app like a user would | see below |
 | Frontend | Lint and a build that includes the TypeScript check | `cd frontend && npm run lint && npm run build` |
 

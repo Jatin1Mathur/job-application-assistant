@@ -377,7 +377,7 @@ Three levels, from fast and narrow to slow and complete.
 
 | Level | Tools | Count | What it proves |
 |---|---|---|---|
-| **Unit tests** | JUnit 5, Mockito | 150 tests in 13 classes | The rules of each service in isolation: scores, the funnel, next actions, the cache key, PDF writing, skill detection, rate limits. Repositories and the AI are mocks. `OllamaAiService` is tested against a fake HTTP server (`MockRestServiceServer`). |
+| **Unit tests** | JUnit 6, Mockito | 150 tests in 13 classes | The rules of each service in isolation: scores, the funnel, next actions, the cache key, PDF writing, skill detection, rate limits. Repositories and the AI are mocks. `OllamaAiService` is tested against a fake HTTP server (`MockRestServiceServer`). |
 | **Web layer tests** | `@WebMvcTest`, MockMvc, the real `SecurityConfig` | 83 tests in 6 classes | Status codes, JSON shapes, validation messages, that every endpoint except the public ones needs a login, the login cookie and its flags, the CSRF check, and the 429 answers. Services are mocks. |
 | **Integration tests** | `@SpringBootTest` with Testcontainers (PostgreSQL and Redis) | 7 tests in 2 classes | That the application starts, the Flyway migrations run, the demo account is seeded, and the database trigger really refuses to delete or change the demo user. |
 | **End-to-end tests** | Playwright ([`e2e/`](../e2e)) | 24 tests with 158 checks | The whole product in a real browser against the Docker setup: sign-up, upload, analysis, cover letter, board, insights, keyboard, phone width, reduced motion, demo account, and the login protection (cookie, CSRF, rate limit, API clients). |
