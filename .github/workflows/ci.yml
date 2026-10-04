@@ -101,3 +101,43 @@ jobs:
           tags: jobassistant-frontend:ci
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
+
+  e2e:
+    name: Browser tests against the Docker setup
+    # Only for pull requests: this job builds and starts the whole app, so it is the slowest one
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Write a .env with throwaway values for this run
+        run: printf 'POSTGRES_PASSWORD=ci-only-password\nJWT_SECRET=ci-only-secret-that-is-at-least-32-characters-long\n' > .env
+      # The same images and the same compose file as on a developer's machine, plus one extra file:
+      # e2e/docker-compose.e2e.yml replaces Ollama with a small stand-in, because there is no AI model in CI.
+      # Only the model's answers are replaced. Backend, database, cache and frontend are the real ones.
+      - name: Build and start the app
+        run: docker compose -f docker-compose.yml -f e2e/docker-compose.e2e.yml up --build -d --wait --wait-timeout 300
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Install the test tools
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run the browser tests
+        working-directory: e2e
+        run: npx playwright test
+      - name: Show the container logs if something failed
+        if: failure()
+        run: docker compose -f docker-compose.yml -f e2e/docker-compose.e2e.yml logs --tail 200
+      - name: Keep the test report if something failed
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7

@@ -1,6 +1,8 @@
 # Design decisions
 
-This document explains the redesign of Job Assistant in step 14: what I looked at for inspiration, what the audit found, what I changed and why, and three trade-offs. I am writing it as a master's student presenting my own project, so I try to say plainly what I know and what I only assume.
+This document explains the design work on Job Assistant from step 14 on: what was looked at for inspiration, what the audit found, what changed and why, and the trade-offs. It tries to say plainly what is known and what is only assumed.
+
+**Who did what.** I built this project with Claude Code as an AI pair programmer. Claude Code ran the audits and measurements described here, wrote the code, and wrote the first draft of this text, using the skills named in each section (taste-skill, impeccable, img2threejs). I set the brief for each step, reviewed the results and every pull request, and decided what to keep. So "I decided" and "I chose" below mean that: the options often came from Claude Code, and the decision to accept them was mine.
 
 The design system itself is in [`DESIGN.md`](../DESIGN.md). Screenshots of every page before and after are in [`docs/screenshots/before`](screenshots/before) and [`docs/screenshots/after`](screenshots/after), in desktop and phone size, light and dark mode.
 
@@ -12,7 +14,7 @@ A job search is stressful and repetitive. So the brief I set for the redesign wa
 
 ## 2. What I learned from three design systems
 
-I read the DESIGN.md files of Linear, Stripe and Vercel from the `awesome-design-md` collection. I did not copy their colors, fonts or layouts. I looked for the reasons each one works.
+For this step, Claude Code read the DESIGN.md files of Linear, Stripe and Vercel from the `awesome-design-md` collection and summarised the reasons each one works. Their colors, fonts and layouts were not copied.
 
 | System | What makes it good | What I took from it (as an idea, not a look) |
 |---|---|---|
@@ -24,7 +26,7 @@ The common lesson: all three are good because they are **restrictive**. Each has
 
 ## 3. The audit
 
-I reviewed the frontend with two installed skills: the redesign checklist from the taste-skill, and the audit and polish playbooks of the impeccable skill. I looked at the 28 "before" screenshots and at the code.
+Claude Code audited the frontend with two installed skills: the redesign checklist from the taste-skill, and the audit and polish playbooks of the impeccable skill. It looked at the 28 "before" screenshots and at the code. I reviewed the findings in the pull request.
 
 One limit, stated openly: the impeccable skill also ships an automatic detector. It needs a program that is downloaded and run on first use, and that step was not run. The findings below come from going through both checklists by hand.
 
@@ -39,7 +41,7 @@ One limit, stated openly: the impeccable skill also ships an automatic detector.
 | Implementation integrity | 2 | Several template patterns: three equal feature cards, a label above the headline, letter avatars, cards inside cards. |
 | **Total** | **13 / 20** | "Acceptable": works, but needs significant design work. |
 
-I have not given myself scores for the result. Grading my own fixes would not mean much; the before and after screenshots are the evidence.
+The result has no scores. An audit that grades the fixes made in the same step would not mean much; the before and after screenshots are the evidence.
 
 ### The top problems, ordered by impact
 
@@ -49,14 +51,14 @@ I have not given myself scores for the result. Grading my own fixes would not me
 4. **Dashboard cards carried decoration instead of information.** A letter avatar took the best position on the card but said nothing. Titles started at different heights depending on whether a card had a score, and every card showed the same absolute date. There was no overview of how many applications were at each stage. *Impact: the screen the user sees most often.*
 5. **The serif was used for small headings.** Section titles of 16 px inside the app were set in the display serif, which is slower to scan in a dense screen. One label was in spaced capitals. *Impact: reading speed everywhere in the app.*
 6. **The landing page used familiar template patterns**: a small label above the headline, a slogan as the headline ("Apply smarter, not harder"), a row of check marks, three equal feature cards with icons, and two competing buttons. *Impact: whether a visitor understands the product in the first seconds.*
-7. **Copy was uneven.** Some messages had exclamation marks, some talked about "the AI" instead of the user's task, and the resume list printed the first lines of the resume, which are my name, email address and phone number. *Impact: tone, and a small privacy problem.*
+7. **Copy was uneven.** Some messages had exclamation marks, some talked about "the AI" instead of the user's task, and the resume list printed the first lines of the resume, which are the user's name, email address and phone number. *Impact: tone, and a small privacy problem.*
 8. **A destructive action sat next to a frequent one.** The delete button was directly beside the status dropdown. *Impact: risk of deleting an application by accident.*
 9. **Cards had both a border and a shadow**, so elevation meant nothing, and a hover lift and a tilt ran at the same time on dashboard cards. *Impact: visual noise.*
 10. **Small leftovers**: the favicon still had the color of an older design, every page had the same browser tab title, and there was no page description for search engines and link previews.
 
-No console errors were found before or after. The only console message is a deprecation warning from the 3D library, which I cannot fix in my own code.
+No console errors were found before or after. The only console message is a deprecation warning from the 3D library, which cannot be fixed in this project's code.
 
-## 4. What I changed and why
+## 4. What changed and why
 
 ### Color: from a loud accent to a calm one
 
@@ -64,7 +66,7 @@ No console errors were found before or after. The only console message is a depr
 - All neutrals share one warm hue: warm paper background, warm charcoal text.
 - A new **sand wash** marks encouraging messages: the next onboarding step and the tip on the insights page. It is a background tint, not a second accent.
 - Green, amber and red stay reserved for the match score and the skills.
-- I computed the contrast of all 46 token pairs I use for text and controls. All text pairs pass 4.5:1 and all control borders and focus rings pass 3:1, in light and dark mode.
+- Claude Code computed the contrast of all 46 token pairs used for text and controls. All text pairs pass 4.5:1 and all control borders and focus rings pass 3:1, in light and dark mode.
 - The 3D scenes, the confetti and the favicon use the new palette.
 
 *Why:* calm and confident. Teal is steady without being cold on a warm background, and it does not collide with the green, amber and red that carry meaning.
@@ -95,7 +97,7 @@ No console errors were found before or after. The only console message is a depr
 ### Phone
 
 - A tab bar at the bottom with an icon and a word for each destination.
-- Every button, tab, field and link is at least 44 px tall on touch screens and narrow screens. I check this in my browser test.
+- Every button, tab, field and link is at least 44 px tall on touch screens and narrow screens. The automated browser run checks this.
 
 ### Landing page
 
@@ -110,7 +112,7 @@ No console errors were found before or after. The only console message is a depr
 - No exclamation marks. "Your account is ready" instead of "Account created. Welcome!".
 - Messages talk about the user's task: "Drafted from the facts in your resume. Nothing is invented."
 - Errors say what happened and what to do.
-- The resume list no longer prints my contact details. It says "Text read and ready to compare".
+- The resume list no longer prints the user's contact details. It says "Text read and ready to compare".
 - Empty states say what will appear and offer the action that makes it appear.
 
 ### Smaller fixes
@@ -121,7 +123,7 @@ No console errors were found before or after. The only console message is a depr
 
 ## 5. What I kept
 
-- **All features.** My automated browser run still passes all of its checks after the redesign (77 checks, including login, upload, analysis, cover letter, board with drag and drop, insights, command palette and shortcuts).
+- **All features.** The automated browser run (a Playwright script written and run by Claude Code) still passes all of its checks after the redesign (77 checks, including login, upload, analysis, cover letter, board with drag and drop, insights, command palette and shortcuts).
 - **The three 3D scenes** (skill galaxy, score orb, skill universe; the galaxy became the backpack hero in step 15, see section 7) with the rules from before: 3D code is only downloaded where a scene is shown, every scene has a flat fallback without WebGL or with reduced motion, and the work screens stay 2D.
 - **Motion that explains**: the card that grows into its page, the gliding board cards, the counting numbers, and confetti only for an offer.
 
@@ -140,27 +142,27 @@ The labelled tab bar takes 56 px at the bottom of every phone screen, and long p
 
 The landing page hero now shows a leather backpack with skills orbiting around it. The backpack stands for the career a job seeker carries along: what you have collected so far and take with you to the next place.
 
-### The reference and what I did with it
+### The reference and what was done with it
 
 The model was rebuilt from one reference photo: **"brown leather backpack on white surface" by Wiser by the Mile on Unsplash (Unsplash License)**. The photo itself is not in this repository (`frontend/reference/` is ignored by git), and no pixel of it is used in the product. The shapes are written in code and the leather is drawn with seeded noise.
 
-I followed the pipeline of the img2threejs skill:
+Claude Code followed the pipeline of the img2threejs skill:
 
 1. **Image analysis** in a fixed order (form, parts, relations, materials, identity-defining features, what one view hides).
 2. **Suitability:** "conditional", because there is only one front view. The back, the sides, the depth and the straps are convention, not evidence.
 3. **A sculpt spec** with 18 parts and 5 materials, checked by the skill's strict validator.
 4. **Eight build passes**, each rendered from five directions and compared with the photo: blockout, structure, form, material, surface, lighting, interaction, optimization. Each pass was recorded with scores and with what still does not match.
 
-The deterministic outline check of the final model against the photo gives a silhouette overlap (IoU) of 0.92. My own estimate of the overall likeness is about 0.78 on the skill's scale, which it describes as "object reads correctly, local details approximate". The renders of the passes are in `docs/screenshots/3d/` (`pass-1-blockout`, `pass-2-structure`, `model-front`, `model-three-quarter`, `model-rear`). The side-by-side sheets with the photo are not committed, because they contain the photo.
+The deterministic outline check of the final model against the photo gives a silhouette overlap (IoU) of 0.92. Claude Code's own estimate of the overall likeness is about 0.78 on the skill's scale, which it describes as "object reads correctly, local details approximate". The renders of the passes are in `docs/screenshots/3d/` (`pass-1-blockout`, `pass-2-structure`, `model-front`, `model-three-quarter`, `model-rear`). The side-by-side sheets with the photo are not committed, because they contain the photo.
 
 ### Decisions
 
-- **The model code is written by hand, from the spec.** The skill's generator produced a first blockout, but it flattened curved parts (the handle became a straight slab), and its output loads textures cut from the photo and contains file paths from my machine. So I used the skill's "refine code" route: I wrote the model myself in `frontend/src/three/backpack/createBackpack.ts` and kept using the skill's capture, gate and comparison tools for every pass.
-- **The maker's logo is not reproduced.** The real bag has an embossed brand mark on the front. I replaced it with a plain plate. Copying a brand's mark into my project would be wrong, and it is not what makes the object a backpack.
+- **The model code was written by Claude Code from the spec, not produced by the skill's generator.** The generator produced a first blockout, but it flattened curved parts (the handle became a straight slab), and its output loads textures cut from the photo and contains file paths from my machine. So Claude Code took the skill's "refine code" route: it wrote the model directly in `frontend/src/three/backpack/createBackpack.ts` and kept using the skill's capture, gate and comparison tools for every pass. I did not write this code myself.
+- **The maker's logo is not reproduced.** The real bag has an embossed brand mark on the front. It is replaced by a plain plate. Copying a brand's mark into my project would be wrong, and it is not what makes the object a backpack.
 - **Stylized, not photoreal.** The panels are smooth and rounded. The sag, the wrinkles, the gathered folds of the side pockets and the darker patina along the seams of the real bag are only suggested. For a small, slowly turning hero object this reads better than a noisy surface, and it costs far fewer triangles.
 - **It turns from side to side instead of spinning.** The photo says nothing about the back, so the back is the weakest part of the model. A slow swing of about 30 degrees to each side shows the volume without showing the back.
 - **Lighting follows DESIGN.md, not the photo.** The photo is lit like a studio shot: flat, white, high-key. In the product the bag gets warm paper light from above, a sand-coloured bounce from below, one soft key, and a faint rim in the accent colour (tide), so it belongs to the page it stands on.
-- **Skills orbit the backpack, with limits.** My first version had eight skills, and it was too busy: labels crossed in front of the bag and the bag was small. The version I kept has six skills (four on a phone) on two visible orbits, a larger bag, a camera slightly above so the orbits open into ellipses, and labels that fade while their skill passes in front of or behind the bag.
+- **Skills orbit the backpack, with limits.** The first version had eight skills, and it was too busy: labels crossed in front of the bag and the bag was small. The version that was kept has six skills (four on a phone) on two visible orbits, a larger bag, a camera slightly above so the orbits open into ellipses, and labels that fade while their skill passes in front of or behind the bag.
 - **The score orb was left as it is.** It already uses the three match colours of DESIGN.md and has the number as normal text.
 
 ### Performance, kept from before
@@ -173,7 +175,7 @@ The deterministic outline check of the final model against the photo gives a sil
 
 ### The better option, if this is still too much
 
-If the hero should be calmer still, I would drop the orbit lines and keep only three skills. The backpack alone carries the idea; the skills are there to connect it to what the product does.
+If the hero should be calmer still, the next step would be to drop the orbit lines and keep only three skills. The backpack alone carries the idea; the skills are there to connect it to what the product does.
 
 ## 8. Scroll storytelling on the landing page
 
@@ -227,14 +229,14 @@ Size: the 3D code grew from 944 kB to 948 kB (254 kB to 255 kB compressed). The 
 
 Screenshots before and after are in `docs/screenshots/home-login/` (desktop and phone, light and dark).
 
-Three skills were named for this step (impeccable, design-taste-frontend, high-end-visual-design). Where they disagree with DESIGN.md, DESIGN.md wins: the fonts, the warm paper palette, the flat hairline cards and the icon set stay as they are. From the skills I took the rules that do not depend on a look: one accent colour on the whole page, no invented numbers, every animation needs a reason, mouse-following effects must not re-render React, and everything that moves needs a reduced-motion version.
+Three skills were named for this step (impeccable, design-taste-frontend, high-end-visual-design). Where they disagree with DESIGN.md, DESIGN.md wins: the fonts, the warm paper palette, the flat hairline cards and the icon set stay as they are. From the skills, only the rules that do not depend on a look were used: one accent colour on the whole page, no invented numbers, every animation needs a reason, mouse-following effects must not re-render React, and everything that moves needs a reduced-motion version.
 
 ### Home page: what each feature is for
 
 | Feature | The UX reason |
 |---|---|
 | **"Try it now" demo** | A visitor should see what the product gives before being asked for an email address. Picking a job and pressing Analyze takes ten seconds and shows the real shape of a result: score, matching skills, missing skills, a tip. |
-| **Labelled as a sample** | The demo does not call the AI model. Its three results were written by hand. A sand-coloured label in the result ("Sample result, not a live analysis") and the text above say so, because a visitor who later sees a different score for their own resume should not feel misled. |
+| **Labelled as a sample** | The demo does not call the AI model. Its three results were written in advance. A sand-coloured label in the result ("Sample result, not a live analysis") and the text above say so, because a visitor who later sees a different score for their own resume should not feel misled. |
 | **Generic vs tailored slider** | "A better cover letter" is an empty claim until you see two letters next to each other. The divider lets the visitor compare the same lines. The highlighted skills show *why* the second letter is better: it names what the posting asks for. The tailored letter also admits the missing skill, because that is what the product does: it does not invent experience. |
 | **Slider as a range input** | A before/after slider is often mouse-only. Here it is a normal range input under the picture, so touch, mouse and the arrow keys all work, and a screen reader announces it. |
 | **"How it's built" diagram** | Part of the audience are reviewers and other students. A diagram answers "what is this made of" faster than a list of logos. The dots show the direction a request travels. One sentence per part appears on hover, tap or keyboard focus, so nobody has to read five paragraphs. |
@@ -245,7 +247,7 @@ Three skills were named for this step (impeccable, design-taste-frontend, high-e
 
 No numbers on the page are invented. The only numbers are the sample scores (labelled as samples) and "0 to 100".
 
-What I changed in the order of the page: the hero keeps its 3D story, and the demo sits directly after it. The request said "hero demo", but the hero already holds the headline, the buttons and the 3D scene, and a third thing there would push the buttons below the fold. The hero has a link "Try a sample first" that jumps to the demo. The old example card that changed by itself is gone: the demo shows the same thing and lets the visitor choose.
+One change to the order of the page: the hero keeps its 3D story, and the demo sits directly after it. My request said "hero demo", but the hero already holds the headline, the buttons and the 3D scene, and a third thing there would push the buttons below the fold. The hero has a link "Try a sample first" that jumps to the demo. The old example card that changed by itself is gone: the demo shows the same thing and lets the visitor choose.
 
 ### Login and register: what each feature is for
 
@@ -342,15 +344,15 @@ One rule for the whole step: **only real data.** Every number on these pages is 
 - pdf.js (431 kB, plus a 1.26 MB worker file that reads the PDF off the main thread) and the compass (3.6 kB on top of the shared 3D code) are separate downloads that start only where they are used: pdf.js on the resumes page, the compass on wide login screens. The dashboard still downloads no 3D code.
 - The main bundle grew from 1,129 kB to 1,213 kB (349 kB to 370 kB compressed): the new pages and two more chart types.
 
-## 11. What I have not done
+## 11. What has not been done
 
-- No test with real users or with a screen reader user. My checks were computed contrast, keyboard walkthroughs, and automated browser runs at desktop and phone width.
+- No test with real users or with a screen reader user. The checks were computed contrast, keyboard walkthroughs, and automated browser runs at desktop and phone width, all done by Claude Code.
 - The automatic detector of the impeccable skill was not run, as described above.
-- The 44 px rule is applied through one CSS rule for touch and narrow screens. I verified it on the insights page in the browser test, not on every page.
+- The 44 px rule is applied through one CSS rule for touch and narrow screens. It was verified on the insights page in the browser run, not on every page.
 - Frame rates of the 3D scenes on real phones are still unmeasured.
 - Skill detection in resumes is a search for well-known names. It misses skills written in other words and can be fooled by words that are also names ("Spring").
 - The funnel and the interview rate rest on the status history, which only exists from this step on. Older applications have only "created" and their current status.
 - The demo account is shared: two visitors at the same time see each other's changes until the nightly reset.
 - The password strength meter is a simple estimate, not a dictionary check.
-- The scroll story was measured on my laptop only. I have not measured it on a real phone or on an older computer.
-- The backpack was rebuilt from one photo. Its back, sides and depth are my assumption, and I did not have a second view to check them.
+- The scroll story was measured on my laptop only, not on a real phone or on an older computer.
+- The backpack was rebuilt from one photo. Its back, sides and depth are an assumption; there was no second view to check them.

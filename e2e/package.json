@@ -1,0 +1,16 @@
+{
+  "name": "job-assistant-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser tests for Job Assistant. They drive the running app the way a user would.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report",
+    "mock-ai": "node mock-ollama.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0"
+  }
+}
