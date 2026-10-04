@@ -1,5 +1,6 @@
 package com.jatin.jobassistant.controller;
 
+import com.jatin.jobassistant.security.RateLimits;
 import com.jatin.jobassistant.service.JobApplicationService.CoverLetterPdf;
 import com.jatin.jobassistant.entity.CoverLetterTone;
 import com.jatin.jobassistant.dto.UpdateDetailsRequest;
@@ -43,6 +44,8 @@ public class JobApplicationController {
 
 	private final JobApplicationService jobApplicationService;
 
+	private final RateLimits rateLimits;
+
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	public ApplicationResponse create(@AuthenticationPrincipal Jwt jwt,
@@ -75,6 +78,7 @@ public class JobApplicationController {
 	@PostMapping("/{id}/analyze")
 	public ResponseEntity<MatchAnalysisResponse> analyze(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
 			@RequestParam Long resumeId) {
+		rateLimits.aiRequest(CurrentUser.id(jwt));
 		MatchAnalysisResult result = jobApplicationService.analyze(CurrentUser.id(jwt), id, resumeId);
 		return ResponseEntity.ok().header("X-Cache", result.fromCache() ? "HIT" : "MISS").body(result.analysis());
 	}
@@ -83,6 +87,7 @@ public class JobApplicationController {
 	@PostMapping("/{id}/cover-letter")
 	public CoverLetterResponse generateCoverLetter(@AuthenticationPrincipal Jwt jwt, @PathVariable Long id,
 			@RequestParam Long resumeId, @RequestParam(defaultValue = "FORMAL") CoverLetterTone tone) {
+		rateLimits.aiRequest(CurrentUser.id(jwt));
 		return jobApplicationService.generateCoverLetter(CurrentUser.id(jwt), id, resumeId, tone);
 	}
 

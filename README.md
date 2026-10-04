@@ -62,7 +62,7 @@ flowchart LR
     Backend --> Ollama["Ollama<br/>llama3.2<br/>on the host machine"]
 ```
 
-The browser only talks to nginx, which serves the React app and passes every `/api` call on to the Spring Boot backend. The backend checks the login token on each request, keeps all data in PostgreSQL, and asks a local language model (Ollama) for the match analysis and the cover letter. Finished analyses are remembered in Redis for 24 hours, so the same question is not sent to the slow model twice. Every row belongs to one user, and resume text is not sent to a cloud AI service.
+The browser only talks to nginx, which serves the React app and passes every `/api` call on to the Spring Boot backend. The backend checks the login token (an httpOnly cookie) on each request, keeps all data in PostgreSQL, and asks a local language model (Ollama) for the match analysis and the cover letter. Finished analyses are remembered in Redis for 24 hours, so the same question is not sent to the slow model twice. Every row belongs to one user, and resume text is not sent to a cloud AI service.
 
 The details are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: container and layer diagrams, sequence diagrams for login and for the cache, the database model, the full API reference, security, testing and deployment. The reasons behind the main decisions are in the [decision records](docs/adr/).
 
@@ -71,11 +71,11 @@ The details are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: container a
 | Area | Technology |
 |---|---|
 | Frontend | React 19, TypeScript 6, Vite 8, Tailwind CSS 4, shadcn/ui, Motion, Recharts, dnd-kit, three.js with React Three Fiber, pdf.js |
-| Backend | Java 25, Spring Boot 4.1, Spring Security (OAuth2 resource server, JWT, BCrypt), Spring Data JPA, Bean Validation, PDFBox 3 |
+| Backend | Java 25, Spring Boot 4.1, Spring Security (OAuth2 resource server, JWT in an httpOnly cookie, CSRF, BCrypt), Bucket4j rate limiting, Spring Data JPA, Bean Validation, PDFBox 3 |
 | Data | PostgreSQL 16 with Flyway migrations, Redis 7 |
 | AI | Ollama with `llama3.2`, called over HTTP (JSON mode for the analysis) |
 | DevOps | Docker (multi-stage images, non-root), Docker Compose with health checks, nginx, GitHub Actions |
-| Testing | JUnit 5, Mockito, Spring MockMvc, integration tests against a real PostgreSQL and Redis, Playwright browser tests, oxlint |
+| Testing | JUnit 6, Mockito, Spring MockMvc, Testcontainers (PostgreSQL and Redis), Playwright browser tests, oxlint |
 
 ## Quick start (Docker)
 
@@ -145,8 +145,8 @@ You are then inside a shared account with two sample resumes, eight sample appli
 
 | Level | What | How to run |
 |---|---|---|
-| Backend | 214 tests (JUnit 5, Mockito, MockMvc): 139 unit tests, 68 web layer tests, 7 integration tests against a real PostgreSQL and Redis | `./mvnw test` (needs `docker compose up -d postgres redis`) |
-| Browser | 21 Playwright tests with 145 checks that use the running app like a user would | see below |
+| Backend | 240 tests (JUnit 6, Mockito, MockMvc): 150 unit tests, 83 web layer tests, 7 integration tests against a real PostgreSQL and Redis started by Testcontainers | `./mvnw test` (needs Docker running, nothing else) |
+| Browser | 24 Playwright tests with 158 checks that use the running app like a user would | see below |
 | Frontend | Lint and a build that includes the TypeScript check | `cd frontend && npm run lint && npm run build` |
 
 Run the browser tests against the running app:
@@ -164,7 +164,7 @@ To run them without Ollama, start the app with a stand-in for the AI model first
 
 On every push and every pull request, GitHub Actions runs `.github/workflows/ci.yml` on a fresh machine:
 
-- **Backend tests**, with a real PostgreSQL and Redis started next to the job
+- **Backend tests**; Testcontainers starts a real PostgreSQL and Redis for the integration tests
 - **Frontend build and lint**
 - **Docker images**: builds both images, to prove the Dockerfiles work
 - **Browser tests** (pull requests only): starts the whole app with Docker Compose and runs the Playwright suite. There is no AI model in CI, so only the language model is replaced by a stand-in with fixed answers.
@@ -173,8 +173,8 @@ The badge at the top of this file shows the result for `main`.
 
 ## Engineering highlights
 
-- **214 backend tests** run on every push in CI, against a real PostgreSQL and Redis. They include integration tests for the demo account and its database trigger.
-- **145 browser checks in 21 Playwright tests** ([e2e/](e2e/)) cover the whole flow: sign-up, upload, AI analysis, cover letter, drag and drop, keyboard use, reduced motion, phone width and the demo account. CI runs them on every pull request against the same Docker setup as on a developer's machine. In CI only the language model is replaced by a stand-in with fixed answers, because there is no AI model there; the same suite also runs against the real model locally.
+- **240 backend tests** run on every push in CI. The integration tests start their own PostgreSQL and Redis with Testcontainers and cover the demo account and its database trigger.
+- **158 browser checks in 24 Playwright tests** ([e2e/](e2e/)) cover the whole flow: sign-up, upload, AI analysis, cover letter, drag and drop, keyboard use, reduced motion, phone width and the demo account. CI runs them on every pull request against the same Docker setup as on a developer's machine. In CI only the language model is replaced by a stand-in with fixed answers, because there is no AI model there; the same suite also runs against the real model locally.
 - **Cache speed-up:** in one measured run with `llama3.2`, the first analysis took 3.66 s and the same request again took 0.01 s from Redis (`X-Cache: MISS`, then `HIT`).
 - **Contrast is computed, not guessed:** all 46 colour pairs used for text and controls were checked. Text pairs pass 4.5:1, control borders and focus rings pass 3:1, in light and dark mode.
 - **3D that stays fast:** the 3D code (about 909 kB) is downloaded only on pages that show a scene, the pixel ratio is capped at 1.5 (1.25 on phones), rendering stops when a scene is off-screen or the tab is hidden, and phones get a lighter backpack (6,888 instead of 11,656 triangles). The scroll story holds about 60 frames per second on a MacBook Air (M4).
@@ -183,6 +183,8 @@ The badge at the top of this file shows the result for `main`.
   - The frontend health check asked `localhost`, which resolved to an address nginx did not listen on, so a working container was reported as unhealthy.
   - After a backend restart, nginx kept sending requests to the backend's old address and answered "502 Bad Gateway".
 - **Small images:** 448 MB for the backend and 87 MB for the frontend, because the build tools stay in the first stage.
+- **Login hardening:** the login token is in an httpOnly, SameSite cookie that JavaScript cannot read, changing requests need a CSRF token, and login attempts and AI requests are rate limited with a clear 429 answer ([ADR 007](docs/adr/007-login-token-in-an-httponly-cookie.md)).
+- **A smaller first download:** every page is loaded on its own. The main bundle went from 1,213 kB to 426 kB (370 kB to 135 kB compressed).
 - **Security basics:** passwords are stored as BCrypt hashes, secrets come from `.env`, the login error does not reveal whether an email exists, and both containers run as a normal user.
 
 ## Project structure
@@ -220,7 +222,7 @@ More before and after pictures of every page, in desktop and phone size and in l
 | Document | What is in it |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagrams of the system, the backend layers, login and caching, the database, the API reference, security, testing, CI and deployment |
-| [docs/adr/](docs/adr/) | Six short decision records: local AI, Redis cache, JWT, Flyway, 3D on selected pages, Docker Compose |
+| [docs/adr/](docs/adr/) | Seven short decision records: local AI, Redis cache, JWT, Flyway, 3D on selected pages, Docker Compose, the login cookie |
 | [DESIGN.md](DESIGN.md) | The design system |
 | [docs/design-decisions.md](docs/design-decisions.md) | The design audit, every change with its UX reason, trade-offs |
 | [e2e/README.md](e2e/README.md) | How to run the browser tests |

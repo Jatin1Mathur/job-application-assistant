@@ -129,9 +129,11 @@ export interface MatchAnalysis {
   resumeTips: string[]
 }
 
-export interface LoginResult {
-  token: string
-  tokenType: string
+// Who is logged in after a login. The token is not part of the answer: it is set as an httpOnly cookie.
+export interface Session {
+  email: string
+  name: string | null
+  demo: boolean
   expiresInSeconds: number
 }
 
@@ -145,15 +147,36 @@ export class ApiError extends Error {
   }
 }
 
-const TOKEN_KEY = 'job-assistant.token'
+// The login token itself is in an httpOnly cookie that this code cannot read (and neither can a script that
+// someone manages to inject into the page). The browser attaches the cookie to every /api request by itself.
+//
+// What is kept here is only a note for the page: "this browser is probably logged in, as this email". It is not a
+// secret and proves nothing; the backend decides on every request whether the cookie is valid.
+const EMAIL_KEY = 'job-assistant.email'
 
-export const tokenStore = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
+export const sessionHint = {
+  get: () => localStorage.getItem(EMAIL_KEY),
+  set: (email: string) => localStorage.setItem(EMAIL_KEY, email),
+  clear: () => localStorage.removeItem(EMAIL_KEY),
 }
 
-// Called when the backend says the token is no longer valid, so the app can log the user out
+// The backend hands out a CSRF token in a cookie the page may read (XSRF-TOKEN). Every request that changes
+// something sends it back in a header. Another website cannot read the cookie, so it cannot send the header,
+// and so it cannot make this browser change anything in the user's name.
+function csrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function withCsrf(headers: Headers, method: string | undefined): Headers {
+  const token = csrfToken()
+  if (token && method && method.toUpperCase() !== 'GET') {
+    headers.set('X-XSRF-TOKEN', token)
+  }
+  return headers
+}
+
+// Called when the backend says the login is no longer valid, so the app can log the user out
 let onSessionExpired: () => void = () => {}
 
 export function setSessionExpiredHandler(handler: () => void) {
@@ -161,11 +184,7 @@ export function setSessionExpiredHandler(handler: () => void) {
 }
 
 async function send(path: string, init: RequestInit = {}): Promise<{ data: unknown; response: Response }> {
-  const headers = new Headers(init.headers)
-  const token = tokenStore.get()
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
-  }
+  const headers = withCsrf(new Headers(init.headers), init.method)
   // For file uploads (FormData) the browser sets the Content-Type itself
   if (typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json')
@@ -173,7 +192,8 @@ async function send(path: string, init: RequestInit = {}): Promise<{ data: unkno
 
   let response: Response
   try {
-    response = await fetch(`/api${path}`, { ...init, headers })
+    // same-origin: the browser sends the login cookie along, but only to this site
+    response = await fetch(`/api${path}`, { ...init, headers, credentials: 'same-origin' })
   } catch {
     throw new ApiError(0, 'Could not reach the server. Check that the backend is running.')
   }
@@ -188,7 +208,7 @@ async function send(path: string, init: RequestInit = {}): Promise<{ data: unkno
 
   if (!response.ok) {
     const backendMessage = (data as { message?: string } | null)?.message
-    if (response.status === 401 && token && !path.startsWith('/auth/')) {
+    if (response.status === 401 && sessionHint.get() && !path.startsWith('/auth/')) {
       onSessionExpired()
     }
     throw new ApiError(
@@ -201,18 +221,15 @@ async function send(path: string, init: RequestInit = {}): Promise<{ data: unkno
 
 // A file from the backend (a PDF). Errors come back as JSON, like everywhere else.
 async function download(path: string): Promise<Blob> {
-  const headers = new Headers()
-  const token = tokenStore.get()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
   let response: Response
   try {
-    response = await fetch(`/api${path}`, { headers })
+    response = await fetch(`/api${path}`, { credentials: 'same-origin' })
   } catch {
     throw new ApiError(0, 'Could not reach the server. Check that the backend is running.')
   }
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as { message?: string } | null
-    if (response.status === 401 && token) onSessionExpired()
+    if (response.status === 401 && sessionHint.get()) onSessionExpired()
     throw new ApiError(response.status, data?.message ?? 'The file could not be loaded.')
   }
   return response.blob()
@@ -245,10 +262,16 @@ export const api = {
   getDashboard: () => request<Dashboard>(`/dashboard?zone=${encodeURIComponent(timeZone())}`),
 
   login: (email: string, password: string) =>
-    request<LoginResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    request<Session>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
 
-  // "Try with demo account": no email and no password, the backend answers with a token for the shared demo user
-  demoLogin: () => request<LoginResult>('/auth/demo', { method: 'POST' }),
+  // "Try with demo account": no email and no password, the backend logs this browser in as the shared demo user
+  demoLogin: () => request<Session>('/auth/demo', { method: 'POST' }),
+
+  // Only the backend can delete the httpOnly cookie
+  logout: () => request<void>('/auth/logout', { method: 'POST' }),
+
+  // Who the login cookie belongs to. 401 if there is none or it has expired.
+  getAccount: () => request<{ email: string; name: string | null; demo: boolean }>('/account'),
 
   listResumes: () => request<ResumeSummary[]>('/resumes'),
 

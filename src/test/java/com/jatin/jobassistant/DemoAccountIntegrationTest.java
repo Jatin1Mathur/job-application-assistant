@@ -1,5 +1,6 @@
 package com.jatin.jobassistant;
 
+import org.springframework.context.annotation.Import;
 import com.jatin.jobassistant.service.JobApplicationService;
 import com.jatin.jobassistant.service.ResumeService;
 import com.jatin.jobassistant.service.InsightsService;
@@ -27,9 +28,12 @@ import com.jatin.jobassistant.repository.ResumeRepository;
 import com.jatin.jobassistant.repository.UserRepository;
 import com.jatin.jobassistant.service.DemoAccountService;
 
-// Runs against the real PostgreSQL from docker-compose, because the protection of the demo user is a
+// Runs against a real PostgreSQL (started by Testcontainers), because the protection of the demo user is a
 // database trigger (migration V5)
-@SpringBootTest
+@SpringBootTest(properties = {
+		// The real values come from .env; the tests bring their own, so they need no .env file
+		"jwt.secret=test-secret-that-is-at-least-32-characters-long", "spring.datasource.password=unused-the-container-sets-it" })
+@Import(TestcontainersConfig.class)
 class DemoAccountIntegrationTest {
 
 	@Autowired

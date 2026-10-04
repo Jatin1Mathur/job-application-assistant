@@ -101,16 +101,20 @@ test('login page: 3D compass, rotating tips, and the demo account with its sampl
   const compare = await text('[data-testid=resume-compare]')
   check('resumes: compare shows both scores and which skills only one has', compare.includes('76.8') && compare.includes('46') && compare.includes('Only in A') && compare.includes('PostgreSQL') && compare.includes('In both'))
 
-  const lockedName = await page.evaluate(() =>
-    fetch('/api/account', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + localStorage.getItem('job-assistant.token') },
-      body: JSON.stringify({ name: 'Someone' }),
-    }).then((response) => response.status),
-  )
-  check('demo account keeps its name', lockedName === 403)
-  const passwordLogin = await page.evaluate(() =>
-    fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'demo@jobassistant.example', password: 'demo' }) }).then((response) => response.status),
-  )
+  const lockedName = await page.evaluate(async () => {
+    const csrf = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)?.[1] ?? ''
+    const response = await fetch('/api/account', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': decodeURIComponent(csrf) }, body: JSON.stringify({ name: 'Someone' }) })
+    return { status: response.status, message: (await response.json()).message as string }
+  })
+  check('demo account keeps its name', lockedName.status === 403 && lockedName.message.includes('demo account is shared'), JSON.stringify(lockedName))
+  const passwordLogin = await page.evaluate(async () => {
+    const csrf = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]+)/)?.[1] ?? ''
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': decodeURIComponent(csrf) },
+      body: JSON.stringify({ email: 'demo@jobassistant.example', password: 'demo' }),
+    })
+    return response.status
+  })
   check('demo account cannot be entered with a password', passwordLogin === 401)
 })

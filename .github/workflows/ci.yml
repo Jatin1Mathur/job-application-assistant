@@ -18,35 +18,8 @@ jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
-    # Some tests start the whole application, so they need a real database and a real cache.
-    # GitHub starts these two containers next to the job, on the same ports as docker-compose.yml.
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_DB: jobassistant
-          POSTGRES_USER: jobuser
-          POSTGRES_PASSWORD: ci-only-password
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U jobuser -d jobassistant"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      redis:
-        image: redis:7
-        ports:
-          - 6380:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-    env:
-      # Throwaway values that exist only inside this test run. The real secrets are in nobody's repository.
-      POSTGRES_PASSWORD: ci-only-password
-      JWT_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+    # Some tests start the whole application, so they need a real database and a real cache. Testcontainers starts
+    # both in Docker for the length of the test run; Docker is already installed on the GitHub runner.
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6

@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, Columns3, LayoutGrid, Plus, SearchX } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -16,7 +16,6 @@ import AnimatedNumber from '../components/AnimatedNumber.tsx'
 import AnimatedTabsList from '../components/AnimatedTabsList.tsx'
 import EmptyState from '../components/EmptyState.tsx'
 import ErrorAlert from '../components/ErrorAlert.tsx'
-import KanbanBoard from '../components/KanbanBoard.tsx'
 import MotionButton from '../components/MotionButton.tsx'
 import OnboardingChecklist from '../components/OnboardingChecklist.tsx'
 import type { OnboardingState } from '../components/OnboardingChecklist.tsx'
@@ -32,6 +31,9 @@ import { formatRelativeDate } from '../lib/format.ts'
 import { usePageTitle } from '../lib/usePageTitle.ts'
 import { staggerItem, staggerList } from '../lib/motion.ts'
 import { statusLabel } from '../lib/status.ts'
+
+// The board and its drag-and-drop library are downloaded when the board view is first opened
+const KanbanBoard = lazy(() => import('../components/KanbanBoard.tsx'))
 
 const PAGE_SIZE = 9
 // The board shows every application at once (the backend allows at most 100 per request)
@@ -346,7 +348,9 @@ export default function DashboardPage() {
             <p className="mt-2">No applications yet. They will appear here once you add the first one.</p>
           </div>
         ) : isBoard ? (
-          <KanbanBoard applications={applications} onMove={moveApplication} />
+          <Suspense fallback={<div className="h-48 animate-pulse rounded-xl bg-muted/60" aria-busy="true" aria-label="Loading the board" />}>
+            <KanbanBoard applications={applications} onMove={moveApplication} />
+          </Suspense>
         ) : applications.length === 0 ? (
           filter === 'ALL' ? (
             <EmptyState

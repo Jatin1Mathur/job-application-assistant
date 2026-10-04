@@ -147,23 +147,10 @@ class AuthServiceTest {
 	}
 
 	@Test
-	void demoLoginReturnsATokenForTheDemoUserWithoutAPassword() {
-		User demo = new User();
-		demo.setId(7L);
-		demo.setEmail("demo@jobassistant.example");
-		demo.setDemo(true);
-		when(userRepository.findByDemoTrue()).thenReturn(Optional.of(demo));
-		when(jwtService.generateToken(7L, "demo@jobassistant.example")).thenReturn("demo-token");
-		when(jwtService.getExpiration()).thenReturn(Duration.ofHours(1));
-
-		assertThat(authService.demoLogin().token()).isEqualTo("demo-token");
-	}
-
-	@Test
 	void demoLoginSaysSoWhenThereIsNoDemoAccount() {
 		when(userRepository.findByDemoTrue()).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> authService.demoLogin()).isInstanceOf(DemoUnavailableException.class);
+		assertThatThrownBy(() -> authService.demoSession()).isInstanceOf(DemoUnavailableException.class);
 	}
 
 	@Test
@@ -213,6 +200,61 @@ class AuthServiceTest {
 
 		assertThatThrownBy(() -> authService.updateName(7L, "Someone")).isInstanceOf(DemoAccountLockedException.class);
 		assertThat(demo.getName()).isEqualTo("Alex");
+	}
+
+	@Test
+	void loginSessionReturnsTheTokenForTheCookieAndWhoIsLoggedIn() {
+		User user = new User();
+		user.setId(1L);
+		user.setEmail("jatin@example.com");
+		user.setName("Jatin");
+		user.setPasswordHash(passwordEncoder.encode("secret-password"));
+		when(userRepository.findByEmail("jatin@example.com")).thenReturn(Optional.of(user));
+		when(jwtService.generateToken(1L, "jatin@example.com")).thenReturn("the.jwt.token");
+		when(jwtService.getExpiration()).thenReturn(Duration.ofHours(24));
+
+		AuthService.Session session = authService.loginSession(new LoginRequest(" Jatin@Example.com ", "secret-password"));
+
+		assertThat(session.token()).isEqualTo("the.jwt.token");
+		assertThat(session.lifetime()).isEqualTo(Duration.ofHours(24));
+		assertThat(session.details().email()).isEqualTo("jatin@example.com");
+		assertThat(session.details().name()).isEqualTo("Jatin");
+		assertThat(session.details().demo()).isFalse();
+		assertThat(session.details().expiresInSeconds()).isEqualTo(86_400);
+	}
+
+	@Test
+	void loginSessionRejectsAWrongPasswordAndTheDemoUser() {
+		User user = new User();
+		user.setId(1L);
+		user.setEmail("jatin@example.com");
+		user.setPasswordHash(passwordEncoder.encode("secret-password"));
+		when(userRepository.findByEmail("jatin@example.com")).thenReturn(Optional.of(user));
+
+		assertThatThrownBy(() -> authService.loginSession(new LoginRequest("jatin@example.com", "wrong")))
+			.isInstanceOf(InvalidCredentialsException.class);
+
+		user.setDemo(true);
+		assertThatThrownBy(() -> authService.loginSession(new LoginRequest("jatin@example.com", "secret-password")))
+			.isInstanceOf(InvalidCredentialsException.class);
+	}
+
+	@Test
+	void demoSessionLogsInTheDemoUserWithoutAPassword() {
+		User demo = new User();
+		demo.setId(7L);
+		demo.setEmail("demo@jobassistant.example");
+		demo.setName("Alex");
+		demo.setDemo(true);
+		when(userRepository.findByDemoTrue()).thenReturn(Optional.of(demo));
+		when(jwtService.generateToken(7L, "demo@jobassistant.example")).thenReturn("demo-token");
+		when(jwtService.getExpiration()).thenReturn(Duration.ofHours(1));
+
+		AuthService.Session session = authService.demoSession();
+
+		assertThat(session.token()).isEqualTo("demo-token");
+		assertThat(session.details().demo()).isTrue();
+		assertThat(session.details().name()).isEqualTo("Alex");
 	}
 
 }
