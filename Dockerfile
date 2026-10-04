@@ -33,7 +33,7 @@ EXPOSE 8080
 
 # Docker asks the app every 15 seconds whether it is alive. Until the first "yes", the frontend waits (see docker-compose.yml).
 HEALTHCHECK --interval=15s --timeout=3s --start-period=40s --retries=5 \
-  CMD wget -q -O /dev/null http://localhost:8080/api/health || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/api/health || exit 1
 
 # Use at most 75% of the memory the container is given, instead of a fixed size
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
