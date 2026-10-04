@@ -1,0 +1,7 @@
+# What is NOT sent to Docker when the frontend image is built
+node_modules
+dist
+reference
+.env
+.env.*
+*.md

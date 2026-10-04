@@ -1,0 +1,56 @@
+# nginx serves the built frontend and passes every /api call on to the backend.
+# The browser only ever talks to this server, so the backend needs no CORS settings (the same idea as the
+# proxy of the Vite dev server).
+
+server {
+  listen 8080;
+  server_name _;
+
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Send text files compressed
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+  gzip_min_length 1024;
+
+  # A resume may be up to 5 MB; the request around it is a little bigger
+  client_max_body_size 6m;
+
+  # The backend
+  location /api/ {
+    proxy_pass ${BACKEND_URL};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # AI requests are slow, so wait up to 5 minutes before giving up
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+  }
+
+  # Files in /assets have a hash of their content in the name (index-CrgJsSVB.js). A new build gives new names,
+  # so the browser may keep these files for a year.
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+    try_files $uri =404;
+  }
+
+  # .mjs files are JavaScript modules (pdf.js ships its worker as one). nginx does not know the ending and would
+  # send them as "unknown file", which browsers refuse to run. So they are named as JavaScript here.
+  location ~ ^/assets/.*\.mjs$ {
+    types { }
+    default_type application/javascript;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+    try_files $uri =404;
+  }
+
+  # Everything else is the single-page app: /dashboard, /login and so on are routes inside index.html.
+  # index.html itself is never cached, so a new version is picked up at once.
+  location / {
+    add_header Cache-Control "no-cache";
+    try_files $uri $uri/ /index.html;
+  }
+}
