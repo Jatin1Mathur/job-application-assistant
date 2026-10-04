@@ -374,15 +374,35 @@ test('kanban board: drag and drop, rollback, animation, confetti', async () => {
 test('insights: charts and the 3D skill universe', async () => {
   await page.keyboard.press('g')
   await page.keyboard.press('i')
+  // Watch the first chart from now on, frame by frame, for three seconds. Looking at it once "early" and once
+  // "late" depended on timing: on a slow machine the first look could come after the animation had finished.
+  const watching = page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const seen: string[] = []
+        const started = performance.now()
+        const look = () => {
+          const chart = document.querySelector('[data-testid=status-chart]')
+          if (chart) {
+            const transform = getComputedStyle(chart).transform
+            if (seen[seen.length - 1] !== transform) seen.push(transform)
+          }
+          if (performance.now() - started < 3000) requestAnimationFrame(look)
+          else resolve(seen)
+        }
+        look()
+      }),
+  )
   await page.waitForSelector('h1:has-text("Insights")')
   check('shortcut G then I opens insights', true)
-  await page.waitForSelector('[data-testid=status-chart]')
-  const transformOf = () => page.evaluate(() => getComputedStyle(document.querySelector('[data-testid=status-chart]')!).transform)
-  const earlyTransform = await transformOf()
   await page.waitForSelector('[data-testid=skills-chart] svg')
-  await page.waitForTimeout(1800)
-  const lateTransform = await transformOf()
-  check('insights: charts animate in and end at full size', earlyTransform !== lateTransform && (lateTransform === 'none' || lateTransform === 'matrix(1, 0, 0, 1, 0, 0)'), `${earlyTransform} -> ${lateTransform}`)
+  const transforms = await watching
+  const finalTransform = transforms[transforms.length - 1]
+  check(
+    'insights: charts animate in and end at full size',
+    transforms.length > 1 && (finalTransform === 'none' || finalTransform === 'matrix(1, 0, 0, 1, 0, 0)'),
+    `${transforms.length} different states, from ${transforms[0]} to ${finalTransform}`,
+  )
 
   const insights = await apiCall(page, 'GET', '/insights')
   const hint = (await page.textContent('[data-testid=skill-hint]')) ?? ''
