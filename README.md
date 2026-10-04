@@ -90,7 +90,7 @@ flowchart LR
 | Data | PostgreSQL 16 with Flyway migrations, Redis 7 |
 | AI | Ollama with `llama3.2`, called over HTTP (JSON mode for the analysis) |
 | DevOps | Docker (multi-stage images, non-root), Docker Compose with health checks, nginx, GitHub Actions |
-| Testing | JUnit 5, Mockito, Spring MockMvc, integration tests against a real PostgreSQL and Redis, Playwright for browser checks, oxlint |
+| Testing | JUnit 5, Mockito, Spring MockMvc, integration tests against a real PostgreSQL and Redis, Playwright browser tests, oxlint |
 
 ## Quick start (Docker)
 
@@ -127,6 +127,7 @@ On every push and every pull request, GitHub Actions runs `.github/workflows/ci.
 - **Backend tests**: `./mvnw test`, with a real PostgreSQL and Redis started next to the job
 - **Frontend build and lint**: `npm ci`, `npm run lint`, `npm run build`
 - **Docker images**: builds both images, to prove the Dockerfiles work
+- **Browser tests** (pull requests only): starts the whole app with Docker Compose and runs the Playwright suite against it
 
 The badge at the top of this file shows the result for `main`.
 
@@ -154,10 +155,23 @@ If the whole app is already running in Docker, stop its backend and frontend fir
 
 The frontend is a React + Vite + TypeScript app with Tailwind CSS in the `frontend` folder. It uses shadcn/ui components, Motion for animations, lucide icons and sonner toasts, and has a light and a dark mode. It needs Node.js 20.19 or newer. The dev server passes every `/api` call on to the backend on port 8080 (see `frontend/vite.config.ts`), so the backend needs no CORS settings.
 
+## Browser tests
+
+The folder [`e2e/`](e2e/) holds a Playwright suite that uses the running app like a user would. Start the app, then:
+
+```
+cd e2e
+npm install                        # only the first time
+npx playwright install chromium    # only the first time
+npm test
+```
+
+To run them without Ollama, start the app with the stand-in for the AI model first: `docker compose -f docker-compose.yml -f e2e/docker-compose.e2e.yml up --build -d`. [e2e/README.md](e2e/README.md) explains both ways, what the stand-in replaces and what it does not.
+
 ## Engineering highlights
 
 - **214 backend tests** run on every push in CI, against a real PostgreSQL and Redis. They include integration tests for the demo account and its database trigger.
-- **145 scripted browser checks** (Playwright) cover the whole flow: sign-up, upload, AI analysis, cover letter, drag and drop, keyboard use, reduced motion, phone width and the demo account. They were run during development, the last time against the Docker build. The script is not part of the repository or of CI yet.
+- **145 browser checks in 21 Playwright tests** ([e2e/](e2e/)) cover the whole flow: sign-up, upload, AI analysis, cover letter, drag and drop, keyboard use, reduced motion, phone width and the demo account. CI runs them on every pull request against the same Docker setup as on a developer's machine. In CI only the language model is replaced by a stand-in with fixed answers, because there is no AI model there; the same suite also runs against the real model locally.
 - **Cache speed-up:** in one measured run with `llama3.2`, the first analysis took 3.66 s and the same request again took 0.01 s from Redis (`X-Cache: MISS`, then `HIT`).
 - **Contrast is computed, not guessed:** all 46 colour pairs used for text and controls were checked. Text pairs pass 4.5:1, control borders and focus rings pass 3:1, in light and dark mode.
 - **3D that stays fast:** the 3D code (about 909 kB) is downloaded only on pages that show a scene, the pixel ratio is capped at 1.5 (1.25 on phones), rendering stops when a scene is off-screen or the tab is hidden, and phones get a lighter backpack (6,888 instead of 11,656 triangles). The scroll story holds about 60 frames per second on a MacBook Air (M4).

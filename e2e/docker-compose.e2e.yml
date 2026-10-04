@@ -1,0 +1,27 @@
+# Used together with the main file, for automated browser tests WITHOUT a real AI model:
+#
+#   docker compose -f docker-compose.yml -f e2e/docker-compose.e2e.yml up --build -d
+#
+# It adds one small container that pretends to be Ollama (e2e/mock-ollama.mjs) and points the backend at it.
+# Everything else is the normal application.
+
+services:
+  mock-ollama:
+    image: node:24-alpine
+    container_name: jobassistant-mock-ollama
+    working_dir: /mock
+    volumes:
+      - ./e2e/mock-ollama.mjs:/mock/mock-ollama.mjs:ro
+    command: ["node", "mock-ollama.mjs"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:11434/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    environment:
+      OLLAMA_BASE_URL: http://mock-ollama:11434
+    depends_on:
+      mock-ollama:
+        condition: service_healthy

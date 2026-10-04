@@ -14,3 +14,5 @@ postman
 .playwright
 .playwright-cli
 *.md
+
+e2e
