@@ -6,9 +6,12 @@ spring:
   config:
     import: optional:file:.env[.properties]
 
-  # PostgreSQL container from docker-compose.yml
+  # PostgreSQL container from docker-compose.yml.
+  # ${NAME:default}: the value comes from the environment variable NAME if it is set, otherwise the default is used.
+  # The defaults fit "./mvnw spring-boot:run" on your own machine; docker-compose.yml sets the variables for the
+  # backend container, where the database is reached as "postgres" and not as "localhost".
   datasource:
-    url: jdbc:postgresql://localhost:5432/jobassistant
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/jobassistant
     username: jobuser
     password: ${POSTGRES_PASSWORD}
 
@@ -20,8 +23,8 @@ spring:
   # Redis container from docker-compose.yml (host port 6380, see the comment there)
   data:
     redis:
-      host: localhost
-      port: 6380
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
 
   # Resume uploads: PDFs up to 5 MB (the request itself may be slightly bigger than the file)
   servlet:
@@ -38,8 +41,8 @@ jwt:
 # Local AI model served by Ollama (https://ollama.com)
 ai:
   ollama:
-    base-url: http://localhost:11434
-    model: llama3.2
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    model: ${OLLAMA_MODEL:llama3.2}
     # Local models are slow, so wait a long time for the answer
     timeout: 180s
 

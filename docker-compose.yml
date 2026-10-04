@@ -1,3 +1,18 @@
+# The whole app with one command:   docker compose up --build
+#
+#   frontend  http://localhost:3000   nginx with the built React app; passes /api on to the backend
+#   backend   http://localhost:8080   Spring Boot
+#   postgres  localhost:5432          database
+#   redis     localhost:6380          cache
+#
+# Ollama (the AI model) is NOT started here. It keeps running on your own machine, and the backend reaches it
+# through host.docker.internal.
+#
+# Secrets come from the file .env next to this file (copy .env.example to .env first). They are never written here.
+#
+# Only the database and the cache, for working on the code with ./mvnw spring-boot:run and npm run dev:
+#   docker compose up -d postgres redis
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -10,6 +25,13 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # "Healthy" means: the database accepts connections. The backend waits for that.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobuser -d jobassistant"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   redis:
@@ -18,6 +40,53 @@ services:
     ports:
       # Host port 6380, so it does not clash with another Redis already running on 6379
       - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: .
+    image: jobassistant-backend
+    container_name: jobassistant-backend
+    environment:
+      # Inside the Docker network the other containers are reached by their service names
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (see .env.example)}
+      # Ollama runs on the host machine, not in a container
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+    # Docker Desktop (Mac, Windows) knows host.docker.internal by itself; this line makes it work on Linux too
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    # Start only when the database and the cache answer, not merely when their containers exist
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    image: jobassistant-frontend
+    container_name: jobassistant-frontend
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "${FRONTEND_PORT:-3000}:8080"
+    # Wait until the backend passes its health check (defined in its Dockerfile)
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
