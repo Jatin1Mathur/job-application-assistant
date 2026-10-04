@@ -327,7 +327,7 @@ Inner elements are tighter than their container. Pills are for small labels, nev
 
 ### Illustration
 
-There are no stock photos and no drawn illustrations. Pictures are either real product output (the example analysis) or 3D objects built in code (the hero backpack with its orbiting skills, the score orb, the skill universe).
+There are no stock photos. Pictures are real product output (the sample analysis), 3D objects built in code (the hero backpack with its orbiting skills, the login compass, the score orb, the skill universe), or the three small empty-state illustrations.
 
 ## Components
 
