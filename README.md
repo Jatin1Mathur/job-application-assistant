@@ -16,9 +16,8 @@ I am an M.Sc. Software Engineering student, and I apply to many jobs at the same
 
 ## Screenshots
 
-| | |
+| Dashboard: numbers with their trend, next actions, activity | Analysis: match score, matching and missing skills, tips |
 |---|---|
-| **Dashboard**: numbers with their trend, next actions, activity | **Analysis**: match score, matching and missing skills, tips |
 | ![Dashboard with four stat cards, a list of next actions and an activity calendar](docs/screenshots/readme/dashboard.webp) | ![Application page with a match score of 82, skill tags and a status timeline](docs/screenshots/readme/analysis.webp) |
 | **Insights**: funnel, best resume, score over time, skills by category | **Board**: drag and drop between statuses, days in each stage |
 | ![Insights page with a funnel from saved to offer and a best-resume card](docs/screenshots/readme/insights.webp) | ![Kanban board with five status columns](docs/screenshots/readme/kanban.webp) |
